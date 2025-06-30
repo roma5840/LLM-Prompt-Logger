@@ -21,7 +21,6 @@ import type { PromptLog } from "@/lib/types";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { format } from 'date-fns';
-import { MoreHorizontal } from "lucide-react";
 
 interface PromptListProps {
   logs: PromptLog[];
@@ -44,41 +43,39 @@ export function PromptList({ logs, totalLogs }: PromptListProps) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Model</TableHead>
+                  <TableHead className="w-[140px]">Model</TableHead>
                   <TableHead>Prompt</TableHead>
-                  <TableHead>Notes</TableHead>
-                  <TableHead className="text-right">Date</TableHead>
+                  <TableHead className="w-[25%]">Notes</TableHead>
+                  <TableHead className="w-[120px] text-right">Date</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {logs.length > 0 ? (
                   logs.map((log) => (
                     <TableRow key={log.id}>
-                      <TableCell>
+                      <TableCell className="align-top">
                         <Badge variant="secondary" className="bg-primary/10 text-primary/90 border-primary/20 hover:bg-primary/20">
                           {log.model}
                         </Badge>
                       </TableCell>
-                      <TableCell className="font-mono text-sm leading-relaxed max-w-md">
-                         {log.prompt.length > PROMPT_TRUNCATE_LENGTH ? (
-                          <div className="flex items-center justify-between">
-                            <p className="truncate pr-2">{log.prompt}</p>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 flex-shrink-0"
-                              onClick={() => setViewingPrompt(log)}
-                            >
-                              <MoreHorizontal className="h-4 w-4" />
-                              <span className="sr-only">View full prompt</span>
-                            </Button>
-                          </div>
-                        ) : (
-                          <p className="whitespace-pre-wrap">{log.prompt}</p>
+                      <TableCell className="font-mono text-sm leading-relaxed align-top">
+                        <p className="whitespace-pre-wrap break-words">
+                          {log.prompt.length > PROMPT_TRUNCATE_LENGTH
+                            ? `${log.prompt.substring(0, PROMPT_TRUNCATE_LENGTH)}...`
+                            : log.prompt}
+                        </p>
+                        {log.prompt.length > PROMPT_TRUNCATE_LENGTH && (
+                          <Button
+                            variant="link"
+                            className="p-0 h-auto text-xs"
+                            onClick={() => setViewingPrompt(log)}
+                          >
+                            Show more
+                          </Button>
                         )}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">{log.notes}</TableCell>
-                      <TableCell className="text-right text-muted-foreground">
+                      <TableCell className="text-muted-foreground align-top break-words">{log.notes}</TableCell>
+                      <TableCell className="text-right text-muted-foreground align-top whitespace-nowrap">
                         {format(log.timestamp, 'MMM d, yyyy')}
                       </TableCell>
                     </TableRow>
