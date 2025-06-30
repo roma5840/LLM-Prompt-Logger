@@ -1,4 +1,3 @@
-// src/components/ModelManager.tsx
 'use client'
 
 import { useState } from 'react'
@@ -34,6 +33,7 @@ interface ModelManagerProps {
 }
 
 const MODEL_NAME_MAX_LENGTH = 80;
+const MODEL_LIMIT = 10;
 
 export function ModelManager({
   models,
@@ -47,8 +47,10 @@ export function ModelManager({
   const [newModel, setNewModel] = useState('')
   const [manualSyncKey, setManualSyncKey] = useState('')
 
+  const isModelLimitReached = models.length >= MODEL_LIMIT;
+
   const handleAddModel = () => {
-    if (newModel && !models.includes(newModel)) {
+    if (newModel && !models.includes(newModel) && !isModelLimitReached) {
       updateUserModels([...models, newModel])
       setNewModel('')
     }
@@ -93,17 +95,26 @@ export function ModelManager({
               <Input
                 value={newModel}
                 onChange={e => setNewModel(e.target.value)}
-                placeholder="New model name"
+                placeholder={isModelLimitReached ? "Model limit reached" : "New model name"}
                 maxLength={MODEL_NAME_MAX_LENGTH}
+                disabled={isModelLimitReached}
               />
-              <div className={cn(
-                  "text-right text-xs pr-1",
-                  newModel.length >= MODEL_NAME_MAX_LENGTH ? "text-red-500" : "text-muted-foreground"
-              )}>
-                {newModel.length} / {MODEL_NAME_MAX_LENGTH}
-              </div>
+              {isModelLimitReached ? (
+                <p className="text-xs text-red-500 px-1">
+                  You have reached the maximum of {MODEL_LIMIT} models.
+                </p>
+              ) : (
+                <div className={cn(
+                    "text-right text-xs pr-1",
+                    newModel.length >= MODEL_NAME_MAX_LENGTH ? "text-red-500" : "text-muted-foreground"
+                )}>
+                  {newModel.length} / {MODEL_NAME_MAX_LENGTH}
+                </div>
+              )}
             </div>
-            <Button onClick={handleAddModel}>Add</Button>
+            <Button onClick={handleAddModel} disabled={isModelLimitReached || !newModel}>
+              Add
+            </Button>
           </div>
           <ul className="mt-2 space-y-1">
             {models.map(model => (
