@@ -16,9 +16,10 @@ import { format } from 'date-fns';
 
 interface PromptListProps {
   logs: PromptLog[];
+  totalLogs: number;
 }
 
-export function PromptList({ logs }: PromptListProps) {
+export function PromptList({ logs, totalLogs }: PromptListProps) {
   return (
     <Card className="border-primary/20 shadow-lg shadow-primary/10">
       <CardHeader>
@@ -54,7 +55,7 @@ export function PromptList({ logs }: PromptListProps) {
               ) : (
                 <TableRow>
                   <TableCell colSpan={4} className="h-24 text-center">
-                    No prompts logged yet.
+                    {totalLogs > 0 ? 'No results found for your filters.' : 'No prompts logged yet.'}
                   </TableCell>
                 </TableRow>
               )}

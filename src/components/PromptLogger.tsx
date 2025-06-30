@@ -24,10 +24,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { PromptLog } from "@/lib/types";
 import { BotMessageSquare } from "lucide-react";
+import { useEffect } from "react";
 
 const formSchema = z.object({
   prompt: z.string().min(1, { message: "Prompt cannot be empty." }),
-  model: z.enum(["GPT-4", "Claude 3", "Gemini 1.5", "Other"]),
+  model: z.string({ required_error: "Please select a model." }).min(1, { message: "Please select a model." }),
   notes: z.string().optional(),
 });
 
@@ -36,23 +37,28 @@ type PromptFormValues = z.infer<typeof formSchema>;
 interface PromptLoggerProps {
   onLogPrompt: (data: Omit<PromptLog, 'id' | 'timestamp'>) => void;
   isLogging: boolean;
+  models: string[];
 }
 
-const models = ["GPT-4", "Claude 3", "Gemini 1.5", "Other"] as const;
-
-export function PromptLogger({ onLogPrompt, isLogging }: PromptLoggerProps) {
+export function PromptLogger({ onLogPrompt, isLogging, models }: PromptLoggerProps) {
   const form = useForm<PromptFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       prompt: "",
-      model: "GPT-4",
+      model: models[0] || "",
       notes: "",
     },
   });
+  
+  useEffect(() => {
+    if (models.length > 0 && !form.getValues('model')) {
+        form.setValue('model', models[0]);
+    }
+  }, [models, form]);
 
   function onSubmit(data: PromptFormValues) {
     onLogPrompt(data);
-    form.reset();
+    form.reset({ prompt: "", model: models[0] || "", notes: "" });
   }
 
   return (
@@ -90,7 +96,7 @@ export function PromptLogger({ onLogPrompt, isLogging }: PromptLoggerProps) {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>LLM Model</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select a model" />
@@ -122,7 +128,7 @@ export function PromptLogger({ onLogPrompt, isLogging }: PromptLoggerProps) {
                 )}
               />
             </div>
-            <Button type="submit" className="w-full md:w-auto" disabled={isLogging}>
+            <Button type="submit" className="w-full md:w-auto" disabled={isLogging || models.length === 0}>
               {isLogging ? "Logging..." : "Log Prompt"}
             </Button>
           </form>

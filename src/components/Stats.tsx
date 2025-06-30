@@ -28,6 +28,7 @@ import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
+  type ChartConfig,
 } from "@/components/ui/chart";
 import type { PromptLog } from "@/lib/types";
 import { useMemo } from "react";
@@ -35,16 +36,34 @@ import { format } from "date-fns";
 
 interface StatsProps {
   logs: PromptLog[];
+  models: string[];
 }
 
-const models: Array<PromptLog["model"]> = [
-  "GPT-4",
-  "Claude 3",
-  "Gemini 1.5",
-  "Other",
+const chartColors = [
+  "hsl(var(--chart-1))",
+  "hsl(var(--chart-2))",
+  "hsl(var(--chart-3))",
+  "hsl(var(--chart-4))",
+  "hsl(var(--chart-5))",
 ];
 
-export function Stats({ logs }: StatsProps) {
+export function Stats({ logs, models }: StatsProps) {
+  const chartConfig = useMemo(() => {
+    const config: ChartConfig = {
+      count: {
+        label: "Prompts",
+        color: "hsl(var(--primary))",
+      },
+    };
+    models.forEach((model, index) => {
+      config[model] = {
+        label: model,
+        color: chartColors[index % chartColors.length],
+      };
+    });
+    return config;
+  }, [models]);
+
   const stats = useMemo(() => {
     const modelCounts = logs.reduce((acc, log) => {
       acc[log.model] = (acc[log.model] || 0) + 1;
@@ -69,7 +88,9 @@ export function Stats({ logs }: StatsProps) {
           acc[dateKey][model] = 0;
         });
       }
-      acc[dateKey][log.model] = (acc[dateKey][log.model] || 0) + 1;
+      if(acc[dateKey][log.model] !== undefined) {
+        acc[dateKey][log.model] = (acc[dateKey][log.model] || 0) + 1;
+      }
       return acc;
     }, {} as Record<string, any>);
 
@@ -78,30 +99,7 @@ export function Stats({ logs }: StatsProps) {
     );
 
     return { total: logs.length, barChartData, lineChartData };
-  }, [logs]);
-
-  const chartConfig = {
-    count: {
-      label: "Prompts",
-      color: "hsl(var(--primary))",
-    },
-    "GPT-4": {
-      label: "GPT-4",
-      color: "hsl(var(--chart-1))",
-    },
-    "Claude 3": {
-      label: "Claude 3",
-      color: "hsl(var(--chart-2))",
-    },
-    "Gemini 1.5": {
-      label: "Gemini 1.5",
-      color: "hsl(var(--chart-3))",
-    },
-    Other: {
-      label: "Other",
-      color: "hsl(var(--chart-4))",
-    },
-  };
+  }, [logs, models]);
 
   return (
     <div className="space-y-6">
@@ -118,7 +116,7 @@ export function Stats({ logs }: StatsProps) {
               {stats.total}
             </div>
             <p className="text-xs text-muted-foreground">
-              Cumulative prompts logged
+              Cumulative prompts logged in selection
             </p>
           </CardContent>
         </Card>
@@ -154,16 +152,19 @@ export function Stats({ logs }: StatsProps) {
                   />
                   <Bar
                     dataKey="count"
-                    fill="var(--color-count)"
                     radius={4}
                     barSize={20}
-                  />
+                  >
+                    {stats.barChartData.map((entry) => (
+                      <rect key={entry.name} fill={chartConfig[entry.name]?.color} />
+                    ))}
+                  </Bar>
                 </RechartsBarChart>
               </ChartContainer>
             ) : (
               <div className="flex h-[120px] items-center justify-center">
                 <p className="text-muted-foreground text-sm">
-                  Log a prompt to see stats.
+                  No data for this period.
                 </p>
               </div>
             )}
@@ -212,7 +213,7 @@ export function Stats({ logs }: StatsProps) {
                     key={model}
                     dataKey={model}
                     type="monotone"
-                    stroke={(chartConfig as any)[model].color}
+                    stroke={chartConfig[model]?.color}
                     strokeWidth={2}
                     dot={true}
                   />

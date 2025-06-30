@@ -1,9 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import type { DateRange } from "react-day-picker";
 import { PromptLogger } from "@/components/PromptLogger";
 import { PromptList } from "@/components/PromptList";
 import { Stats } from "@/components/Stats";
+import { FilterControls } from "@/components/FilterControls";
+import { ModelManager } from "@/components/ModelManager";
 import type { PromptLog } from "@/lib/types";
 import { Bot } from "lucide-react";
 
@@ -38,13 +41,20 @@ const initialLogs: PromptLog[] = [
   },
 ];
 
+const defaultModels = ["GPT-4", "Claude 3", "Gemini 1.5", "Other"];
+
 export default function Home() {
   const [logs, setLogs] = useState<PromptLog[]>([]);
+  const [models, setModels] = useState<string[]>([]);
   const [isLogging, setIsLogging] = useState(false);
   const [isClient, setIsClient] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const [isModelManagerOpen, setModelManagerOpen] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
+    // Load logs
     const savedLogs = localStorage.getItem("promptLogs");
     if (savedLogs) {
       const parsedLogs = JSON.parse(savedLogs).map((log: any) => ({
@@ -55,6 +65,13 @@ export default function Home() {
     } else {
       setLogs(initialLogs);
     }
+    // Load models
+    const savedModels = localStorage.getItem("promptModels");
+    if (savedModels) {
+      setModels(JSON.parse(savedModels));
+    } else {
+      setModels(defaultModels);
+    }
   }, []);
 
   useEffect(() => {
@@ -62,6 +79,12 @@ export default function Home() {
       localStorage.setItem("promptLogs", JSON.stringify(logs));
     }
   }, [logs, isClient]);
+  
+  useEffect(() => {
+    if (isClient) {
+      localStorage.setItem("promptModels", JSON.stringify(models));
+    }
+  }, [models, isClient]);
 
   const handleLogPrompt = (data: Omit<PromptLog, 'id' | 'timestamp'>) => {
     setIsLogging(true);
@@ -75,6 +98,39 @@ export default function Home() {
       setIsLogging(false);
     }, 500);
   };
+  
+  const handleClearFilters = () => {
+    setSearchQuery("");
+    setDateRange(undefined);
+  };
+
+  const filteredLogs = useMemo(() => {
+    return logs
+      .filter((log) => {
+        if (!dateRange?.from) return true;
+        const logDate = new Date(log.timestamp);
+        logDate.setHours(0,0,0,0);
+        
+        const fromDate = new Date(dateRange.from);
+        fromDate.setHours(0,0,0,0);
+
+        if (dateRange.to) {
+            const toDate = new Date(dateRange.to);
+            toDate.setHours(0,0,0,0);
+            return logDate >= fromDate && logDate <= toDate;
+        }
+        return logDate.getTime() === fromDate.getTime();
+      })
+      .filter((log) => {
+        if (!searchQuery) return true;
+        const lowerCaseQuery = searchQuery.toLowerCase();
+        return (
+          log.prompt.toLowerCase().includes(lowerCaseQuery) ||
+          log.notes.toLowerCase().includes(lowerCaseQuery) ||
+          log.model.toLowerCase().includes(lowerCaseQuery)
+        );
+      });
+  }, [logs, searchQuery, dateRange]);
   
   if (!isClient) {
       return (
@@ -96,10 +152,29 @@ export default function Home() {
       </header>
 
       <div className="space-y-8">
-        <Stats logs={logs} />
-        <PromptLogger onLogPrompt={handleLogPrompt} isLogging={isLogging} />
-        <PromptList logs={logs} />
+        <Stats logs={filteredLogs} models={models} />
+        <PromptLogger onLogPrompt={handleLogPrompt} isLogging={isLogging} models={models} />
+        
+        <div className="space-y-4">
+          <FilterControls 
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            dateRange={dateRange}
+            onDateChange={setDateRange}
+            onClearFilters={handleClearFilters}
+            onManageModels={() => setModelManagerOpen(true)}
+            resultCount={filteredLogs.length}
+            totalCount={logs.length}
+          />
+          <PromptList logs={filteredLogs} totalLogs={logs.length} />
+        </div>
       </div>
+      <ModelManager 
+        open={isModelManagerOpen}
+        onOpenChange={setModelManagerOpen}
+        models={models}
+        setModels={setModels}
+      />
     </main>
   );
 }
