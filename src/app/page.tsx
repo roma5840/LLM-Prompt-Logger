@@ -1,51 +1,82 @@
+// src/app/page.tsx
 'use client'
 
+import { useState, useMemo } from 'react'
+import type { DateRange } from "react-day-picker"
 import { useData } from '@/hooks/use-data'
 import { Stats } from '@/components/Stats'
-import { PromptLogger } from '@/components/PromptLogger'
-import { FilterControls } from '@/components/FilterControls'
 import { PromptList } from '@/components/PromptList'
-import { ModelManager } from '@/components/ModelManager'
-import { Sidebar, SidebarContent } from '@/components/ui/sidebar'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { DateRangePicker } from '@/components/ui/date-range-picker'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Button } from '@/components/ui/button'
 
 export default function Home() {
   const data = useData()
+  const [filterModel, setFilterModel] = useState<string>('all')
+  const [dateRange, setDateRange] = useState<DateRange | undefined>()
+
+  const filteredHistory = useMemo(() => {
+    return data.history
+      .filter(p => {
+        if (filterModel === 'all') return true
+        return p.model === filterModel
+      })
+      .filter(p => {
+        if (!dateRange || (!dateRange.from && !dateRange.to)) return true
+        const timestamp = p.timestamp.getTime()
+        const from = dateRange.from ? new Date(dateRange.from).setHours(0, 0, 0, 0) : null
+        const to = dateRange.to ? new Date(dateRange.to).setHours(23, 59, 59, 999) : null
+        if (from && to) return timestamp >= from && timestamp <= to
+        if (from) return timestamp >= from
+        if (to) return timestamp <= to
+        return true
+      })
+  }, [data.history, filterModel, dateRange])
+
+  const clearFilters = () => {
+    setFilterModel('all')
+    setDateRange(undefined)
+  }
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar>
-        <SidebarContent>
-          <PromptLogger addPrompt={data.addPrompt} models={data.models} />
-          <ModelManager
-            models={data.models}
-            updateUserModels={data.updateUserModels}
-            syncKey={data.syncKey}
-            migrateToCloud={data.migrateToCloud}
-            linkDeviceWithKey={data.linkDeviceWithKey}
-            handleExportData={data.handleExportData}
-            handleImportData={data.handleImportData}
-          />
-        </SidebarContent>
-      </Sidebar>
-      <div className="border-r border-gray-200" />
-      <main className="flex-1 p-4 overflow-auto">
-        <div className="flex flex-col flex-1">
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-bold">Dashboard</h1>
-            <FilterControls />
-          </div>
-          <Stats history={data.history} models={data.models} />
-          <div className="mt-6">
-            <h2 className="text-xl font-bold mb-4">Prompt History</h2>
-            <PromptList
-              loading={data.loading}
-              history={data.history}
-              deletePrompt={data.deletePrompt}
-              updatePromptNote={data.updatePromptNote}
-            />
-          </div>
+    <main className="flex-1 p-4 md:p-6 lg:p-8 flex flex-col gap-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select value={filterModel} onValueChange={setFilterModel}>
+            <SelectTrigger className="w-full sm:w-[180px]">
+              <SelectValue placeholder="Filter by model" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Models</SelectItem>
+              {data.models.map(model => (
+                <SelectItem key={model} value={model}>
+                  {model}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <DateRangePicker date={dateRange} setDate={setDateRange} />
+          <Button variant="ghost" onClick={clearFilters}>Clear</Button>
         </div>
-      </main>
-    </div>
+      </div>
+
+      <Stats history={filteredHistory} models={data.models} />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Prompt History</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <PromptList
+            loading={data.loading}
+            history={filteredHistory}
+            deletePrompt={data.deletePrompt}
+            updatePromptNote={data.updatePromptNote}
+          />
+        </CardContent>
+      </Card>
+    </main>
   )
 }

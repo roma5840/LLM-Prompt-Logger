@@ -1,11 +1,40 @@
+// src/hooks/use-data.tsx
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, createContext, useContext, ReactNode } from 'react'
 import { supabase } from '@/lib/supabase'
 import { DEFAULT_MODELS, LOCAL_HISTORY_STORAGE, LOCAL_MODELS_STORAGE, SYNC_KEY_STORAGE } from '@/lib/constants'
 import { Prompt, Model } from '@/lib/types'
 
-export const useData = () => {
+interface DataContextType {
+  history: Prompt[];
+  models: Model[];
+  syncKey: string | null;
+  loading: boolean;
+  addPrompt: (model: string, note: string) => Promise<void>;
+  updatePromptNote: (id: number, note: string) => Promise<void>;
+  deletePrompt: (id: number) => Promise<void>;
+  deleteAllPrompts: () => Promise<void>;
+  updateUserModels: (newModels: Model[]) => Promise<void>;
+  migrateToCloud: () => Promise<void>;
+  linkDeviceWithKey: (key: string) => Promise<boolean>;
+  handleExportData: () => Promise<void>;
+  handleImportData: (file: File) => Promise<void>;
+  setHistory: React.Dispatch<React.SetStateAction<Prompt[]>>;
+  setModels: React.Dispatch<React.SetStateAction<Model[]>>;
+}
+
+const DataContext = createContext<DataContextType | undefined>(undefined);
+
+export const useData = (): DataContextType => {
+  const context = useContext(DataContext);
+  if (!context) {
+    throw new Error('useData must be used within a DataProvider');
+  }
+  return context;
+};
+
+export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [history, setHistory] = useState<Prompt[]>([])
   const [models, setModels] = useState<Model[]>(DEFAULT_MODELS)
   const [syncKey, setSyncKey] = useState<string | null>(null)
@@ -330,8 +359,7 @@ export const useData = () => {
     }
   }
 
-
-  return {
+  const value = {
     history,
     models,
     syncKey,
@@ -345,7 +373,9 @@ export const useData = () => {
     linkDeviceWithKey,
     handleExportData,
     handleImportData,
-    setHistory, 
-    setModels
-  }
-}
+    setHistory,
+    setModels,
+  };
+
+  return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
+};

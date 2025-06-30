@@ -1,8 +1,10 @@
+// src/app/layout.tsx
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { ThemeProvider } from "@/components/theme-provider"
-import { SidebarProvider, Sidebar, SidebarTrigger, SidebarContent, SidebarInset } from '@/components/ui/sidebar'
+import { DataProvider } from '@/hooks/use-data'
+import { MainLayout } from '@/components/MainLayout'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -25,21 +27,11 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <SidebarProvider>
-            <div className="flex min-h-screen">
-              <Sidebar>
-                {/* Sidebar content is rendered by the page component */}
-              </Sidebar>
-              <div className="flex-1 flex flex-col">
-                <header className="p-4 border-b flex items-center">
-                  <SidebarTrigger />
-                </header>
-                <SidebarInset>
-                  {children}
-                </SidebarInset>
-              </div>
-            </div>
-          </SidebarProvider>
+          <DataProvider>
+            <MainLayout>
+              {children}
+            </MainLayout>
+          </DataProvider>
         </ThemeProvider>
       </body>
     </html>

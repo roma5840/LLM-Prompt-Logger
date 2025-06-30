@@ -1,9 +1,11 @@
+// src/components/Stats.tsx
 'use client'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, LineChart, Line, CartesianGrid } from 'recharts'
 import { Prompt, Model } from '@/lib/types'
 import { useMemo } from 'react'
+import { Skeleton } from './ui/skeleton'
 
 interface StatsProps {
   history: Prompt[]
@@ -35,9 +37,13 @@ export function Stats({ history, models }: StatsProps) {
   }, [history, models])
   
   const dailyUsage = useMemo(() => {
+    if (history.length === 0) return [];
     const usage: { [date: string]: { date: string, [model: string]: number | string } } = {};
-    history.forEach(prompt => {
-      const date = new Date(prompt.timestamp).toLocaleDateString();
+    
+    const sortedHistory = [...history].sort((a,b) => a.timestamp.getTime() - b.timestamp.getTime());
+
+    sortedHistory.forEach(prompt => {
+      const date = new Date(prompt.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       if (!usage[date]) {
         usage[date] = { date };
         models.forEach(m => usage[date][m] = 0);
@@ -50,7 +56,7 @@ export function Stats({ history, models }: StatsProps) {
   }, [history, models]);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
       <Card>
         <CardHeader>
           <CardTitle>Total Prompts</CardTitle>
@@ -67,38 +73,46 @@ export function Stats({ history, models }: StatsProps) {
           <p className="text-4xl font-bold">{dailyPrompts}</p>
         </CardContent>
       </Card>
-      <Card className="md:col-span-2 lg:col-span-1">
+      <Card className="md:col-span-2">
         <CardHeader>
           <CardTitle>Model Distribution</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={modelCounts} layout="vertical">
-              <XAxis type="number" hide />
-              <YAxis type="category" dataKey="name" width={80} stroke="#888888" fontSize={12} tickLine={false} axisLine={false}/>
-              <Tooltip />
-              <Bar dataKey="count" fill="#8884d8" />
-            </BarChart>
-          </ResponsiveContainer>
+          {modelCounts.length > 0 ? (
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={modelCounts} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                <XAxis type="number" hide />
+                <YAxis type="category" dataKey="name" width={100} stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false}/>
+                <Tooltip cursor={{ fill: 'hsl(var(--accent))' }} contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} />
+                <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-[200px] flex items-center justify-center text-sm text-muted-foreground">No data for this period.</div>
+          )}
         </CardContent>
       </Card>
-      <Card className="md:col-span-2 lg:col-span-3">
+      <Card className="md:col-span-2 lg:col-span-4">
         <CardHeader>
           <CardTitle>Daily Usage</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={dailyUsage}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              {models.map((model, i) => (
-                <Line key={model} type="monotone" dataKey={model} stroke={COLORS[i % COLORS.length]} />
-              ))}
-            </LineChart>
-          </ResponsiveContainer>
+          {dailyUsage.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={dailyUsage}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} />
+                <Legend />
+                {models.map((model, i) => (
+                  <Line key={model} type="monotone" dataKey={model} stroke={COLORS[i % COLORS.length]} dot={false} strokeWidth={2} />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+             <div className="h-[300px] flex items-center justify-center text-sm text-muted-foreground">No data for this period.</div>
+          )}
         </CardContent>
       </Card>
     </div>
