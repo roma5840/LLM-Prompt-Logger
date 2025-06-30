@@ -11,10 +11,17 @@ import { DateRangePicker } from '@/components/ui/date-range-picker'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 
+const getDefaultDateRange = (): DateRange => {
+  const to = new Date();
+  const from = new Date();
+  from.setDate(to.getDate() - 13); // Set 'from' to 13 days ago for a 14-day total period
+  return { from, to };
+};
+
 export default function Home() {
   const data = useData()
   const [filterModel, setFilterModel] = useState<string>('all')
-  const [dateRange, setDateRange] = useState<DateRange | undefined>()
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(getDefaultDateRange())
 
   const filteredHistory = useMemo(() => {
     return data.history

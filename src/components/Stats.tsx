@@ -1,11 +1,9 @@
-// src/components/Stats.tsx
 'use client'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, LineChart, Line, CartesianGrid, Cell } from 'recharts'
 import { Prompt, Model } from '@/lib/types'
 import { useMemo } from 'react'
-import { Skeleton } from './ui/skeleton'
 
 interface StatsProps {
   history: Prompt[]
@@ -31,6 +29,10 @@ export function Stats({ history, models }: StatsProps) {
     return map;
   }, [models]);
 
+  const activeModelsInPeriod = useMemo(() => {
+    return new Set(history.map(p => p.model));
+  }, [history]);
+
   const modelCounts = useMemo(() => {
     const counts: { [key: string]: number } = {}
     models.forEach(model => {
@@ -45,23 +47,39 @@ export function Stats({ history, models }: StatsProps) {
   }, [history, models])
   
   const dailyUsage = useMemo(() => {
-    if (history.length === 0) return [];
-    const usage: { [date: string]: { date: string, [model: string]: number | string } } = {};
-    
-    const sortedHistory = [...history].sort((a,b) => a.timestamp.getTime() - b.timestamp.getTime());
-
-    sortedHistory.forEach(prompt => {
-      const date = new Date(prompt.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      if (!usage[date]) {
-        usage[date] = { date };
-        models.forEach(m => usage[date][m] = 0);
+    const promptCountsByDate = new Map<string, Map<string, number>>();
+    history.forEach(prompt => {
+      const dateKey = prompt.timestamp.toISOString().split('T')[0]; 
+      if (!promptCountsByDate.has(dateKey)) {
+        promptCountsByDate.set(dateKey, new Map());
       }
-      if (typeof usage[date][prompt.model] === 'number') {
-        (usage[date][prompt.model] as number)++;
-      }
+      const dayMap = promptCountsByDate.get(dateKey)!;
+      const currentCount = dayMap.get(prompt.model) || 0;
+      dayMap.set(prompt.model, currentCount + 1);
     });
-    return Object.values(usage);
-  }, [history, models]);
+
+    const last14Days = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      d.setDate(d.getDate() - i);
+      last14Days.push(d);
+    }
+    
+    return last14Days.map(date => {
+      const dateKey = date.toISOString().split('T')[0];
+      const displayDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      
+      const chartDataPoint: { date: string, [model: string]: number | string } = { date: displayDate };
+      const countsForDay = promptCountsByDate.get(dateKey);
+
+      activeModelsInPeriod.forEach(model => {
+        chartDataPoint[model] = (countsForDay && countsForDay.get(model)) || 0;
+      });
+
+      return chartDataPoint;
+    });
+  }, [history, activeModelsInPeriod]);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -114,10 +132,10 @@ export function Stats({ history, models }: StatsProps) {
               <LineChart data={dailyUsage}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} allowDecimals={false} />
                 <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} />
                 <Legend />
-                {models.map((model) => (
+                {Array.from(activeModelsInPeriod).map((model) => (
                   <Line key={model} type="monotone" dataKey={model} stroke={modelColorMap.get(model)} dot={false} strokeWidth={2} />
                 ))}
               </LineChart>
