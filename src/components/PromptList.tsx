@@ -13,6 +13,12 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -21,17 +27,23 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Textarea } from './ui/textarea'
+import { MoreHorizontal } from 'lucide-react'
 
 interface PromptListProps {
   loading: boolean
   history: Prompt[]
   deletePrompt: (id: number) => void
-  updatePromptNote: (id:number, note: string) => void
+  updatePromptNote: (id: number, note: string) => void
 }
 
 const ITEMS_PER_PAGE = 10
 
-export function PromptList({ loading, history, deletePrompt, updatePromptNote }: PromptListProps) {
+export function PromptList({
+  loading,
+  history,
+  deletePrompt,
+  updatePromptNote,
+}: PromptListProps) {
   const [filter, setFilter] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null)
@@ -91,31 +103,46 @@ export function PromptList({ loading, history, deletePrompt, updatePromptNote }:
             <TableRow key={prompt.id}>
               <TableCell>{prompt.model}</TableCell>
               <TableCell>{prompt.note}</TableCell>
-              <TableCell>{new Date(prompt.timestamp).toLocaleString()}</TableCell>
+              <TableCell>
+                {new Date(prompt.timestamp).toLocaleString()}
+              </TableCell>
               <TableCell>
                 <Dialog>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" size="sm" onClick={() => handleEdit(prompt)}>Edit</Button>
-                  </DialogTrigger>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" className="h-8 w-8 p-0">
+                        <span className="sr-only">Open menu</span>
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DialogTrigger asChild>
+                        <DropdownMenuItem onClick={() => handleEdit(prompt)}>
+                          Edit
+                        </DropdownMenuItem>
+                      </DialogTrigger>
+                      <DropdownMenuItem
+                        onClick={() => deletePrompt(prompt.id)}
+                        className="text-red-600"
+                      >
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   <DialogContent>
                     <DialogHeader>
                       <DialogTitle>Edit Prompt Note</DialogTitle>
                     </DialogHeader>
-                    <Textarea value={editedNote} onChange={(e) => setEditedNote(e.target.value)} rows={5}/>
+                    <Textarea
+                      value={editedNote}
+                      onChange={e => setEditedNote(e.target.value)}
+                      rows={5}
+                    />
                     <DialogFooter>
                       <Button onClick={handleSaveEdit}>Save</Button>
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
-
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => deletePrompt(prompt.id)}
-                  className="ml-2"
-                >
-                  Delete
-                </Button>
               </TableCell>
             </TableRow>
           ))}
@@ -138,8 +165,6 @@ export function PromptList({ loading, history, deletePrompt, updatePromptNote }:
           Next
         </Button>
       </div>
-
-      
     </div>
   )
 }

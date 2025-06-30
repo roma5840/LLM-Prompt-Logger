@@ -1,6 +1,6 @@
 'use client'
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, LineChart, Line, CartesianGrid } from 'recharts'
 import { Prompt, Model } from '@/lib/types'
 import { useMemo } from 'react'
@@ -14,6 +14,8 @@ const getStartOfToday = () => {
   const now = new Date();
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
+
+const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
 
 export function Stats({ history, models }: StatsProps) {
   const totalPrompts = history.length
@@ -93,7 +95,7 @@ export function Stats({ history, models }: StatsProps) {
               <Tooltip />
               <Legend />
               {models.map((model, i) => (
-                <Line key={model} type="monotone" dataKey={model} stroke={`#${Math.floor(Math.random()*16777215).toString(16)}`} />
+                <Line key={model} type="monotone" dataKey={model} stroke={COLORS[i % COLORS.length]} />
               ))}
             </LineChart>
           </ResponsiveContainer>

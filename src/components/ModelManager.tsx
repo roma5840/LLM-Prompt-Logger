@@ -12,6 +12,12 @@ import {
   DialogTrigger,
   DialogFooter,
 } from '@/components/ui/dialog'
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion'
 import QRCode from 'qrcode'
 import { Html5Qrcode } from 'html5-qrcode'
 
@@ -47,9 +53,9 @@ export function ModelManager({
   const handleRemoveModel = (modelToRemove: string) => {
     updateUserModels(models.filter(m => m !== modelToRemove))
   }
-  
+
   const generateQrCode = (text: string, canvas: HTMLCanvasElement) => {
-    QRCode.toCanvas(canvas, text, { width: 256 }, (error) => {
+    QRCode.toCanvas(canvas, text, { width: 256 }, error => {
       if (error) console.error(error)
     })
   }
@@ -64,7 +70,7 @@ export function ModelManager({
           onScanSuccess(decodedText)
           scanner.stop()
         },
-        (errorMessage) => {
+        errorMessage => {
           // console.log(errorMessage)
         }
       )
@@ -73,92 +79,122 @@ export function ModelManager({
     }
   }
 
-
   return (
-    <div className="p-4 space-y-4">
-      <div>
-        <h3 className="font-bold mb-2">Manage Models</h3>
-        <div className="flex space-x-2">
-          <Input
-            value={newModel}
-            onChange={e => setNewModel(e.target.value)}
-            placeholder="New model name"
-          />
-          <Button onClick={handleAddModel}>Add</Button>
-        </div>
-        <ul className="mt-2 space-y-1">
-          {models.map(model => (
-            <li key={model} className="flex justify-between items-center text-sm">
-              {model}
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => handleRemoveModel(model)}
+    <Accordion type="multiple" className="w-full">
+      <AccordionItem value="manage-models">
+        <AccordionTrigger>Manage Models</AccordionTrigger>
+        <AccordionContent>
+          <div className="flex space-x-2">
+            <Input
+              value={newModel}
+              onChange={e => setNewModel(e.target.value)}
+              placeholder="New model name"
+            />
+            <Button onClick={handleAddModel}>Add</Button>
+          </div>
+          <ul className="mt-2 space-y-1">
+            {models.map(model => (
+              <li
+                key={model}
+                className="flex justify-between items-center text-sm"
               >
-                X
-              </Button>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <div>
-        <h3 className="font-bold mb-2">Data Sync</h3>
-        {syncKey ? (
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button className="w-full">Link Another Device</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Scan QR Code</DialogTitle>
-              </DialogHeader>
-              <canvas id="qr-code-canvas" ref={canvas => canvas && generateQrCode(syncKey, canvas)}></canvas>
-              <Input value={syncKey} readOnly />
-            </DialogContent>
-          </Dialog>
-        ) : (
-          <div className="space-y-2">
-            <Button onClick={migrateToCloud} className="w-full">
-              Enable Cloud Sync
-            </Button>
+                {model}
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => handleRemoveModel(model)}
+                >
+                  X
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </AccordionContent>
+      </AccordionItem>
+      <AccordionItem value="data-sync">
+        <AccordionTrigger>Data Sync</AccordionTrigger>
+        <AccordionContent>
+          {syncKey ? (
             <Dialog>
               <DialogTrigger asChild>
-                <Button variant="outline" className="w-full">Link This Device</Button>
+                <Button className="w-full">Link Another Device</Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Scan or Enter Sync Key</DialogTitle>
+                  <DialogTitle>Scan QR Code</DialogTitle>
                 </DialogHeader>
-                <div id="qr-reader"></div>
-                <Input
-                  placeholder="Enter sync key manually"
-                  value={manualSyncKey}
-                  onChange={e => setManualSyncKey(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') {
-                      linkDeviceWithKey(manualSyncKey)
-                    }
-                  }}
-                />
-                 <DialogFooter>
-                  <Button onClick={() => linkDeviceWithKey(manualSyncKey)}>Link</Button>
-                </DialogFooter>
-                <DialogTrigger asChild>
-                   <Button variant="secondary" onClick={() => startQrScanner((key) => linkDeviceWithKey(key))}>Start Scanner</Button>
-                </DialogTrigger>
+                <canvas
+                  id="qr-code-canvas"
+                  ref={canvas => canvas && generateQrCode(syncKey, canvas)}
+                ></canvas>
+                <Input value={syncKey} readOnly />
               </DialogContent>
             </Dialog>
+          ) : (
+            <div className="space-y-2">
+              <Button onClick={migrateToCloud} className="w-full">
+                Enable Cloud Sync
+              </Button>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="outline" className="w-full">
+                    Link This Device
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Scan or Enter Sync Key</DialogTitle>
+                  </DialogHeader>
+                  <div id="qr-reader"></div>
+                  <Input
+                    placeholder="Enter sync key manually"
+                    value={manualSyncKey}
+                    onChange={e => setManualSyncKey(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        linkDeviceWithKey(manualSyncKey)
+                      }
+                    }}
+                  />
+                  <DialogFooter>
+                    <Button onClick={() => linkDeviceWithKey(manualSyncKey)}>
+                      Link
+                    </Button>
+                  </DialogFooter>
+                  <DialogTrigger asChild>
+                    <Button
+                      variant="secondary"
+                      onClick={() =>
+                        startQrScanner(key => linkDeviceWithKey(key))
+                      }
+                    >
+                      Start Scanner
+                    </Button>
+                  </DialogTrigger>
+                </DialogContent>
+              </Dialog>
+            </div>
+          )}
+        </AccordionContent>
+      </AccordionItem>
+      <AccordionItem value="data-management">
+        <AccordionTrigger>Data Management</AccordionTrigger>
+        <AccordionContent>
+          <div className="space-y-2">
+            <Button onClick={handleExportData} className="w-full">
+              Export Data
+            </Button>
+            <Input
+              type="file"
+              accept=".json"
+              onChange={e =>
+                e.target.files && handleImportData(e.target.files[0])
+              }
+              className="w-full"
+            />
           </div>
-        )}
-      </div>
-      <div>
-        <h3 className="font-bold mb-2">Data Management</h3>
-        <div className="space-y-2">
-            <Button onClick={handleExportData} className="w-full">Export Data</Button>
-            <Input type="file" accept=".json" onChange={(e) => e.target.files && handleImportData(e.target.files[0])} className="w-full"/>
-        </div>
-      </div>
-    </div>
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
   )
 }

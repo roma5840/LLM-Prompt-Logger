@@ -12,7 +12,7 @@ export default function Home() {
   const data = useData()
 
   return (
-    <>
+    <div className="flex min-h-screen">
       <Sidebar>
         <SidebarContent>
           <PromptLogger addPrompt={data.addPrompt} models={data.models} />
@@ -27,20 +27,25 @@ export default function Home() {
           />
         </SidebarContent>
       </Sidebar>
+      <div className="border-r border-gray-200" />
       <main className="flex-1 p-4 overflow-auto">
-        <h1 className="text-2xl font-bold mb-4">Dashboard</h1>
-        <Stats history={data.history} models={data.models} />
-        <div className="mt-6">
-          <h2 className="text-xl font-bold mb-4">Prompt History</h2>
-          <FilterControls />
-          <PromptList
-            loading={data.loading}
-            history={data.history}
-            deletePrompt={data.deletePrompt}
-            updatePromptNote={data.updatePromptNote}
-          />
+        <div className="flex flex-col flex-1">
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-2xl font-bold">Dashboard</h1>
+            <FilterControls />
+          </div>
+          <Stats history={data.history} models={data.models} />
+          <div className="mt-6">
+            <h2 className="text-xl font-bold mb-4">Prompt History</h2>
+            <PromptList
+              loading={data.loading}
+              history={data.history}
+              deletePrompt={data.deletePrompt}
+              updatePromptNote={data.updatePromptNote}
+            />
+          </div>
         </div>
       </main>
-    </>
+    </div>
   )
 }
