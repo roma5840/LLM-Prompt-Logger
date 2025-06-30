@@ -9,6 +9,7 @@ import {
   Bar,
   BarChart as RechartsBarChart,
   CartesianGrid,
+  Cell,
   Legend,
   Line,
   LineChart as RechartsLineChart,
@@ -156,7 +157,7 @@ export function Stats({ logs, models }: StatsProps) {
                     barSize={20}
                   >
                     {stats.barChartData.map((entry) => (
-                      <rect key={entry.name} fill={chartConfig[entry.name]?.color} />
+                      <Cell key={`cell-${entry.name}`} fill={chartConfig[entry.name]?.color} />
                     ))}
                   </Bar>
                 </RechartsBarChart>

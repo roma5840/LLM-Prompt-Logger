@@ -23,14 +23,16 @@ interface ModelManagerProps {
 }
 
 const MAX_MODELS = 10;
+const MAX_MODEL_LENGTH = 25;
 
 export function ModelManager({ open, onOpenChange, models, setModels }: ModelManagerProps) {
   const [newModel, setNewModel] = React.useState("")
   const atModelLimit = models.length >= MAX_MODELS;
 
   const handleAddModel = () => {
-    if (newModel && !models.includes(newModel) && !atModelLimit) {
-      setModels([...models, newModel].sort())
+    const trimmedModel = newModel.trim();
+    if (trimmedModel && !models.includes(trimmedModel) && !atModelLimit) {
+      setModels([...models, trimmedModel].sort())
       setNewModel("")
     }
   }
@@ -80,17 +82,32 @@ export function ModelManager({ open, onOpenChange, models, setModels }: ModelMan
                 onKeyDown={handleInputKeyDown}
                 placeholder="e.g., Llama 3"
                 disabled={atModelLimit}
+                maxLength={MAX_MODEL_LENGTH}
               />
-              <Button type="button" onClick={handleAddModel} size="icon" disabled={atModelLimit}>
+              <Button 
+                type="button" 
+                onClick={handleAddModel} 
+                size="icon" 
+                disabled={atModelLimit || !newModel.trim() || models.includes(newModel.trim())}
+              >
                 <PlusCircle className="h-4 w-4" />
                 <span className="sr-only">Add Model</span>
               </Button>
             </div>
+             <p className="text-xs text-muted-foreground text-right">{newModel.length}/{MAX_MODEL_LENGTH}</p>
             {atModelLimit && (
                  <Alert className="mt-2 border-amber-500/50 text-amber-500 [&>svg]:text-amber-500">
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>
                         You have reached the maximum of {MAX_MODELS} models.
+                    </AlertDescription>
+                </Alert>
+            )}
+            {models.includes(newModel.trim()) && newModel.trim().length > 0 && (
+                 <Alert variant="destructive" className="mt-2">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                        Model name already exists.
                     </AlertDescription>
                 </Alert>
             )}

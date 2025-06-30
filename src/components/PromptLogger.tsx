@@ -58,7 +58,7 @@ export function PromptLogger({ onLogPrompt, isLogging, models }: PromptLoggerPro
 
   function onSubmit(data: PromptFormValues) {
     onLogPrompt(data);
-    form.reset({ prompt: "", model: models[0] || "", notes: "" });
+    form.reset({ prompt: "", model: data.model, notes: "" });
   }
 
   return (
