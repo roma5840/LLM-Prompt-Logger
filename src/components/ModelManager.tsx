@@ -12,7 +12,8 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Trash2, PlusCircle } from "lucide-react"
+import { Trash2, PlusCircle, AlertCircle } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 interface ModelManagerProps {
   open: boolean
@@ -21,11 +22,14 @@ interface ModelManagerProps {
   setModels: (models: string[]) => void
 }
 
+const MAX_MODELS = 10;
+
 export function ModelManager({ open, onOpenChange, models, setModels }: ModelManagerProps) {
   const [newModel, setNewModel] = React.useState("")
+  const atModelLimit = models.length >= MAX_MODELS;
 
   const handleAddModel = () => {
-    if (newModel && !models.includes(newModel)) {
+    if (newModel && !models.includes(newModel) && !atModelLimit) {
       setModels([...models, newModel].sort())
       setNewModel("")
     }
@@ -53,7 +57,7 @@ export function ModelManager({ open, onOpenChange, models, setModels }: ModelMan
         </DialogHeader>
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <h4 className="text-sm font-medium">Current Models</h4>
+            <h4 className="text-sm font-medium">Current Models ({models.length}/{MAX_MODELS})</h4>
             <div className="flex flex-wrap gap-2">
               {models.length > 0 ? models.map((model) => (
                 <Badge key={model} variant="secondary" className="flex items-center gap-2 bg-primary/10 text-primary/90 border-primary/20">
@@ -75,12 +79,21 @@ export function ModelManager({ open, onOpenChange, models, setModels }: ModelMan
                 onChange={(e) => setNewModel(e.target.value)}
                 onKeyDown={handleInputKeyDown}
                 placeholder="e.g., Llama 3"
+                disabled={atModelLimit}
               />
-              <Button type="button" onClick={handleAddModel} size="icon">
+              <Button type="button" onClick={handleAddModel} size="icon" disabled={atModelLimit}>
                 <PlusCircle className="h-4 w-4" />
                 <span className="sr-only">Add Model</span>
               </Button>
             </div>
+            {atModelLimit && (
+                 <Alert className="mt-2 border-amber-500/50 text-amber-500 [&>svg]:text-amber-500">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                        You have reached the maximum of {MAX_MODELS} models.
+                    </AlertDescription>
+                </Alert>
+            )}
           </div>
         </div>
         <DialogFooter>
