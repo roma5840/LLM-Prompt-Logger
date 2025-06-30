@@ -1,4 +1,3 @@
-// src/components/PromptList.tsx
 'use client'
 
 import { useState } from 'react'
@@ -39,6 +38,7 @@ interface PromptListProps {
 }
 
 const ITEMS_PER_PAGE = 10
+const NOTE_TRUNCATE_LENGTH = 100;
 
 export function PromptList({
   loading,
@@ -105,7 +105,32 @@ export function PromptList({
             {paginatedHistory.map(prompt => (
               <TableRow key={prompt.id}>
                 <TableCell className="font-medium">{prompt.model}</TableCell>
-                <TableCell className="text-muted-foreground">{prompt.note}</TableCell>
+                <TableCell className="text-muted-foreground max-w-sm break-words">
+                  {prompt.note.length > NOTE_TRUNCATE_LENGTH ? (
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <span className="cursor-pointer hover:underline">
+                          {`${prompt.note.substring(0, NOTE_TRUNCATE_LENGTH)}...`}
+                        </span>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-xl">
+                        <DialogHeader>
+                          <DialogTitle>Full Prompt Note</DialogTitle>
+                        </DialogHeader>
+                        <div className="my-4 max-h-[60vh] overflow-y-auto whitespace-pre-wrap break-words rounded-md border bg-muted/50 p-4 text-sm">
+                          {prompt.note}
+                        </div>
+                        <DialogFooter>
+                          <DialogClose asChild>
+                            <Button variant="outline">Close</Button>
+                          </DialogClose>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  ) : (
+                    prompt.note
+                  )}
+                </TableCell>
                 <TableCell>
                   {new Date(prompt.timestamp).toLocaleString()}
                 </TableCell>
