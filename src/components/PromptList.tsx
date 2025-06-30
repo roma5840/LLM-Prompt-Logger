@@ -40,14 +40,14 @@ export function PromptList({ logs, totalLogs }: PromptListProps) {
           <CardTitle className="font-headline text-2xl">Prompt History</CardTitle>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="h-[400px] w-full">
+          <ScrollArea className="h-[400px]">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[150px]">Model</TableHead>
+                  <TableHead>Model</TableHead>
                   <TableHead>Prompt</TableHead>
-                  <TableHead className="w-[200px]">Notes</TableHead>
-                  <TableHead className="text-right w-[150px]">Date</TableHead>
+                  <TableHead>Notes</TableHead>
+                  <TableHead className="text-right">Date</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
