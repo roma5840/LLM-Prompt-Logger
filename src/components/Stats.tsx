@@ -46,6 +46,11 @@ const chartColors = [
   "hsl(var(--chart-3))",
   "hsl(var(--chart-4))",
   "hsl(var(--chart-5))",
+  "hsl(var(--chart-6))",
+  "hsl(var(--chart-7))",
+  "hsl(var(--chart-8))",
+  "hsl(var(--chart-9))",
+  "hsl(var(--chart-10))",
 ];
 
 export function Stats({ logs, models }: StatsProps) {
@@ -130,7 +135,7 @@ export function Stats({ logs, models }: StatsProps) {
           </CardHeader>
           <CardContent className="pb-2">
             {stats.barChartData.length > 0 ? (
-              <ChartContainer config={chartConfig} className="h-[120px] w-full">
+              <ChartContainer config={chartConfig} className="h-[250px] w-full">
                 <RechartsBarChart
                   accessibilityLayer
                   data={stats.barChartData}
@@ -144,7 +149,7 @@ export function Stats({ logs, models }: StatsProps) {
                     tickLine={false}
                     axisLine={false}
                     tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
-                    width={80}
+                    width={100}
                   />
                   <XAxis dataKey="count" type="number" hide />
                   <ChartTooltip
@@ -154,7 +159,7 @@ export function Stats({ logs, models }: StatsProps) {
                   <Bar
                     dataKey="count"
                     radius={4}
-                    barSize={20}
+                    barSize={12}
                   >
                     {stats.barChartData.map((entry) => (
                       <Cell key={`cell-${entry.name}`} fill={chartConfig[entry.name]?.color} />
