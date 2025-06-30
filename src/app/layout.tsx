@@ -1,29 +1,47 @@
-import type {Metadata} from 'next';
-import './globals.css';
-import { Toaster } from "@/components/ui/toaster";
+import type { Metadata } from 'next'
+import { Inter } from 'next/font/google'
+import './globals.css'
+import { ThemeProvider } from "@/components/theme-provider"
+import { SidebarProvider, Sidebar, SidebarTrigger, SidebarContent, SidebarInset } from '@/components/ui/sidebar'
+
+const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'PromptLog',
-  description: 'A dedicated tracking app for logging LLM usage tailored for frequent users.',
-};
+  description: 'Log and analyze your LLM prompts',
+}
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: {
+  children: React.ReactNode
+}) {
   return (
-    <html lang="en" className="dark">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet" />
-        <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
-      </head>
-      <body className="font-body antialiased">
-        {children}
-        <Toaster />
+    <html lang="en" suppressHydrationWarning>
+      <body className={inter.className}>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <SidebarProvider>
+            <div className="flex min-h-screen">
+              <Sidebar>
+                {/* Sidebar content is rendered by the page component */}
+              </Sidebar>
+              <div className="flex-1 flex flex-col">
+                <header className="p-4 border-b flex items-center">
+                  <SidebarTrigger />
+                </header>
+                <SidebarInset>
+                  {children}
+                </SidebarInset>
+              </div>
+            </div>
+          </SidebarProvider>
+        </ThemeProvider>
       </body>
     </html>
-  );
+  )
 }

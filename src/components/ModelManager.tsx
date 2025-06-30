@@ -1,122 +1,164 @@
-"use client"
+'use client'
 
-import * as React from "react"
+import { useState } from 'react'
+import { Model } from '@/lib/types'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
   DialogFooter,
-} from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Trash2, PlusCircle, AlertCircle } from "lucide-react"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+} from '@/components/ui/dialog'
+import QRCode from 'qrcode'
+import { Html5Qrcode } from 'html5-qrcode'
 
 interface ModelManagerProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  models: string[]
-  setModels: (models: string[]) => void
+  models: Model[]
+  updateUserModels: (models: Model[]) => void
+  syncKey: string | null
+  migrateToCloud: () => void
+  linkDeviceWithKey: (key: string) => Promise<boolean>
+  handleExportData: () => void
+  handleImportData: (file: File) => void
 }
 
-const MAX_MODELS = 10;
-const MAX_MODEL_LENGTH = 25;
-
-export function ModelManager({ open, onOpenChange, models, setModels }: ModelManagerProps) {
-  const [newModel, setNewModel] = React.useState("")
-  const atModelLimit = models.length >= MAX_MODELS;
+export function ModelManager({
+  models,
+  updateUserModels,
+  syncKey,
+  migrateToCloud,
+  linkDeviceWithKey,
+  handleExportData,
+  handleImportData,
+}: ModelManagerProps) {
+  const [newModel, setNewModel] = useState('')
+  const [manualSyncKey, setManualSyncKey] = useState('')
 
   const handleAddModel = () => {
-    const trimmedModel = newModel.trim();
-    if (trimmedModel && !models.includes(trimmedModel) && !atModelLimit) {
-      setModels([...models, trimmedModel].sort())
-      setNewModel("")
+    if (newModel && !models.includes(newModel)) {
+      updateUserModels([...models, newModel])
+      setNewModel('')
     }
   }
 
-  const handleDeleteModel = (modelToDelete: string) => {
-    setModels(models.filter((model) => model !== modelToDelete))
+  const handleRemoveModel = (modelToRemove: string) => {
+    updateUserModels(models.filter(m => m !== modelToRemove))
+  }
+  
+  const generateQrCode = (text: string, canvas: HTMLCanvasElement) => {
+    QRCode.toCanvas(canvas, text, { width: 256 }, (error) => {
+      if (error) console.error(error)
+    })
   }
 
-  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleAddModel();
+  const startQrScanner = async (onScanSuccess: (decodedText: string) => void) => {
+    const scanner = new Html5Qrcode('qr-reader')
+    try {
+      await scanner.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        (decodedText, decodedResult) => {
+          onScanSuccess(decodedText)
+          scanner.stop()
+        },
+        (errorMessage) => {
+          // console.log(errorMessage)
+        }
+      )
+    } catch (err) {
+      console.error(err)
     }
   }
+
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle>Manage Models</DialogTitle>
-          <DialogDescription>
-            Add or remove LLM models from your list. This will update the dropdown in the prompt logger.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 py-4">
-          <div className="space-y-2">
-            <h4 className="text-sm font-medium">Current Models ({models.length}/{MAX_MODELS})</h4>
-            <div className="flex flex-wrap gap-2">
-              {models.length > 0 ? models.map((model) => (
-                <Badge key={model} variant="secondary" className="flex items-center gap-2 bg-primary/10 text-primary/90 border-primary/20">
-                  {model}
-                  <button onClick={() => handleDeleteModel(model)} className="rounded-full hover:bg-destructive/20 p-0.5">
-                    <Trash2 className="h-3 w-3 text-destructive" />
-                  </button>
-                </Badge>
-              )) : (
-                  <p className="text-sm text-muted-foreground">No models configured.</p>
-              )}
-            </div>
-          </div>
-          <div className="space-y-2">
-             <h4 className="text-sm font-medium">Add New Model</h4>
-            <div className="flex gap-2">
-              <Input
-                value={newModel}
-                onChange={(e) => setNewModel(e.target.value)}
-                onKeyDown={handleInputKeyDown}
-                placeholder="e.g., Llama 3"
-                disabled={atModelLimit}
-                maxLength={MAX_MODEL_LENGTH}
-              />
-              <Button 
-                type="button" 
-                onClick={handleAddModel} 
-                size="icon" 
-                disabled={atModelLimit || !newModel.trim() || models.includes(newModel.trim())}
-              >
-                <PlusCircle className="h-4 w-4" />
-                <span className="sr-only">Add Model</span>
-              </Button>
-            </div>
-             <p className="text-xs text-muted-foreground text-right">{newModel.length}/{MAX_MODEL_LENGTH}</p>
-            {atModelLimit && (
-                 <Alert className="mt-2 border-amber-500/50 text-amber-500 [&>svg]:text-amber-500">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>
-                        You have reached the maximum of {MAX_MODELS} models.
-                    </AlertDescription>
-                </Alert>
-            )}
-            {models.includes(newModel.trim()) && newModel.trim().length > 0 && (
-                 <Alert variant="destructive" className="mt-2">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>
-                        Model name already exists.
-                    </AlertDescription>
-                </Alert>
-            )}
-          </div>
+    <div className="p-4 space-y-4">
+      <div>
+        <h3 className="font-bold mb-2">Manage Models</h3>
+        <div className="flex space-x-2">
+          <Input
+            value={newModel}
+            onChange={e => setNewModel(e.target.value)}
+            placeholder="New model name"
+          />
+          <Button onClick={handleAddModel}>Add</Button>
         </div>
-        <DialogFooter>
-          <Button onClick={() => onOpenChange(false)}>Done</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        <ul className="mt-2 space-y-1">
+          {models.map(model => (
+            <li key={model} className="flex justify-between items-center text-sm">
+              {model}
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => handleRemoveModel(model)}
+              >
+                X
+              </Button>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div>
+        <h3 className="font-bold mb-2">Data Sync</h3>
+        {syncKey ? (
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button className="w-full">Link Another Device</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Scan QR Code</DialogTitle>
+              </DialogHeader>
+              <canvas id="qr-code-canvas" ref={canvas => canvas && generateQrCode(syncKey, canvas)}></canvas>
+              <Input value={syncKey} readOnly />
+            </DialogContent>
+          </Dialog>
+        ) : (
+          <div className="space-y-2">
+            <Button onClick={migrateToCloud} className="w-full">
+              Enable Cloud Sync
+            </Button>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="w-full">Link This Device</Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Scan or Enter Sync Key</DialogTitle>
+                </DialogHeader>
+                <div id="qr-reader"></div>
+                <Input
+                  placeholder="Enter sync key manually"
+                  value={manualSyncKey}
+                  onChange={e => setManualSyncKey(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      linkDeviceWithKey(manualSyncKey)
+                    }
+                  }}
+                />
+                 <DialogFooter>
+                  <Button onClick={() => linkDeviceWithKey(manualSyncKey)}>Link</Button>
+                </DialogFooter>
+                <DialogTrigger asChild>
+                   <Button variant="secondary" onClick={() => startQrScanner((key) => linkDeviceWithKey(key))}>Start Scanner</Button>
+                </DialogTrigger>
+              </DialogContent>
+            </Dialog>
+          </div>
+        )}
+      </div>
+      <div>
+        <h3 className="font-bold mb-2">Data Management</h3>
+        <div className="space-y-2">
+            <Button onClick={handleExportData} className="w-full">Export Data</Button>
+            <Input type="file" accept=".json" onChange={(e) => e.target.files && handleImportData(e.target.files[0])} className="w-full"/>
+        </div>
+      </div>
+    </div>
   )
 }

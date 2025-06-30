@@ -1,7 +1,9 @@
-export interface PromptLog {
-  id: string;
-  prompt: string;
+export interface Prompt {
+  id: number;
+  bucket_id?: string;
   model: string;
-  notes: string;
+  note: string;
   timestamp: Date;
 }
+
+export type Model = string;

@@ -1,6 +1,9 @@
-"use client";
+'use client'
 
-import { useState } from "react";
+import { useState } from 'react'
+import { Prompt } from '@/lib/types'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import {
   Table,
   TableBody,
@@ -8,103 +11,135 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from '@/components/ui/table'
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import type { PromptLog } from "@/lib/types";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Button } from "@/components/ui/button";
-import { format } from 'date-fns';
+  DialogTrigger,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Textarea } from './ui/textarea'
 
 interface PromptListProps {
-  logs: PromptLog[];
-  totalLogs: number;
+  loading: boolean
+  history: Prompt[]
+  deletePrompt: (id: number) => void
+  updatePromptNote: (id:number, note: string) => void
 }
 
-const PROMPT_TRUNCATE_LENGTH = 150;
+const ITEMS_PER_PAGE = 10
 
-export function PromptList({ logs, totalLogs }: PromptListProps) {
-  const [viewingPrompt, setViewingPrompt] = useState<PromptLog | null>(null);
+export function PromptList({ loading, history, deletePrompt, updatePromptNote }: PromptListProps) {
+  const [filter, setFilter] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null)
+  const [editedNote, setEditedNote] = useState('')
+
+  const filteredHistory = history.filter(
+    p =>
+      p.note.toLowerCase().includes(filter.toLowerCase()) ||
+      p.model.toLowerCase().includes(filter.toLowerCase())
+  )
+
+  const paginatedHistory = filteredHistory.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  )
+
+  const totalPages = Math.ceil(filteredHistory.length / ITEMS_PER_PAGE)
+
+  const handleEdit = (prompt: Prompt) => {
+    setEditingPrompt(prompt)
+    setEditedNote(prompt.note)
+  }
+
+  const handleSaveEdit = () => {
+    if (editingPrompt) {
+      updatePromptNote(editingPrompt.id, editedNote)
+      setEditingPrompt(null)
+    }
+  }
+
+  if (loading) {
+    return <p>Loading...</p>
+  }
 
   return (
-    <>
-      <Card className="border-primary/20 shadow-lg shadow-primary/10">
-        <CardHeader>
-          <CardTitle className="font-headline text-2xl">Prompt History</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ScrollArea className="h-[400px]">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[140px]">Model</TableHead>
-                  <TableHead>Prompt</TableHead>
-                  <TableHead className="w-[25%]">Notes</TableHead>
-                  <TableHead className="w-[120px] text-right">Date</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {logs.length > 0 ? (
-                  logs.map((log) => (
-                    <TableRow key={log.id}>
-                      <TableCell className="align-top">
-                        <Badge variant="secondary" className="bg-primary/10 text-primary/90 border-primary/20 hover:bg-primary/20">
-                          {log.model}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-mono text-sm leading-relaxed align-top">
-                        <p className="whitespace-pre-wrap break-words">
-                          {log.prompt.length > PROMPT_TRUNCATE_LENGTH
-                            ? `${log.prompt.substring(0, PROMPT_TRUNCATE_LENGTH)}...`
-                            : log.prompt}
-                        </p>
-                        {log.prompt.length > PROMPT_TRUNCATE_LENGTH && (
-                          <Button
-                            variant="link"
-                            className="p-0 h-auto text-xs"
-                            onClick={() => setViewingPrompt(log)}
-                          >
-                            Show more
-                          </Button>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground align-top break-words">{log.notes}</TableCell>
-                      <TableCell className="text-right text-muted-foreground align-top whitespace-nowrap">
-                        {format(log.timestamp, 'MMM d, yyyy')}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={4} className="h-24 text-center">
-                      {totalLogs > 0 ? 'No results found for your filters.' : 'No prompts logged yet.'}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </ScrollArea>
-        </CardContent>
-      </Card>
+    <div>
+      <Input
+        placeholder="Filter by note or model..."
+        value={filter}
+        onChange={e => {
+          setFilter(e.target.value)
+          setCurrentPage(1)
+        }}
+        className="mb-4"
+      />
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Model</TableHead>
+            <TableHead>Note</TableHead>
+            <TableHead>Timestamp</TableHead>
+            <TableHead>Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {paginatedHistory.map(prompt => (
+            <TableRow key={prompt.id}>
+              <TableCell>{prompt.model}</TableCell>
+              <TableCell>{prompt.note}</TableCell>
+              <TableCell>{new Date(prompt.timestamp).toLocaleString()}</TableCell>
+              <TableCell>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm" onClick={() => handleEdit(prompt)}>Edit</Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Edit Prompt Note</DialogTitle>
+                    </DialogHeader>
+                    <Textarea value={editedNote} onChange={(e) => setEditedNote(e.target.value)} rows={5}/>
+                    <DialogFooter>
+                      <Button onClick={handleSaveEdit}>Save</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => deletePrompt(prompt.id)}
+                  className="ml-2"
+                >
+                  Delete
+                </Button>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      <div className="flex justify-between items-center mt-4">
+        <Button
+          disabled={currentPage === 1}
+          onClick={() => setCurrentPage(p => p - 1)}
+        >
+          Previous
+        </Button>
+        <span>
+          Page {currentPage} of {totalPages}
+        </span>
+        <Button
+          disabled={currentPage === totalPages}
+          onClick={() => setCurrentPage(p => p + 1)}
+        >
+          Next
+        </Button>
+      </div>
+
       
-      <Dialog open={!!viewingPrompt} onOpenChange={(open) => !open && setViewingPrompt(null)}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Full Prompt</DialogTitle>
-          </DialogHeader>
-          <ScrollArea className="max-h-[70vh] my-4 pr-6">
-            <p className="font-mono text-sm leading-relaxed whitespace-pre-wrap">
-              {viewingPrompt?.prompt}
-            </p>
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
+    </div>
+  )
 }
