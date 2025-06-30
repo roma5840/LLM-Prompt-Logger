@@ -1,3 +1,4 @@
+// src/components/ModelManager.tsx
 'use client'
 
 import { useState } from 'react'
@@ -20,6 +21,7 @@ import {
 } from '@/components/ui/accordion'
 import QRCode from 'qrcode'
 import { Html5Qrcode } from 'html5-qrcode'
+import { cn } from '@/lib/utils'
 
 interface ModelManagerProps {
   models: Model[]
@@ -30,6 +32,8 @@ interface ModelManagerProps {
   handleExportData: () => void
   handleImportData: (file: File) => void
 }
+
+const MODEL_NAME_MAX_LENGTH = 80;
 
 export function ModelManager({
   models,
@@ -84,24 +88,34 @@ export function ModelManager({
       <AccordionItem value="manage-models">
         <AccordionTrigger>Manage Models</AccordionTrigger>
         <AccordionContent>
-          <div className="flex space-x-2">
-            <Input
-              value={newModel}
-              onChange={e => setNewModel(e.target.value)}
-              placeholder="New model name"
-            />
+          <div className="flex items-start space-x-2">
+            <div className="flex-grow space-y-1">
+              <Input
+                value={newModel}
+                onChange={e => setNewModel(e.target.value)}
+                placeholder="New model name"
+                maxLength={MODEL_NAME_MAX_LENGTH}
+              />
+              <div className={cn(
+                  "text-right text-xs pr-1",
+                  newModel.length >= MODEL_NAME_MAX_LENGTH ? "text-red-500" : "text-muted-foreground"
+              )}>
+                {newModel.length} / {MODEL_NAME_MAX_LENGTH}
+              </div>
+            </div>
             <Button onClick={handleAddModel}>Add</Button>
           </div>
           <ul className="mt-2 space-y-1">
             {models.map(model => (
               <li
                 key={model}
-                className="flex justify-between items-center text-sm"
+                className="flex justify-between items-center text-sm p-2 rounded-md hover:bg-accent"
               >
-                {model}
+                <span className="break-all">{model}</span>
                 <Button
-                  variant="destructive"
+                  variant="ghost"
                   size="sm"
+                  className="w-6 h-6 p-0"
                   onClick={() => handleRemoveModel(model)}
                 >
                   X
@@ -123,10 +137,12 @@ export function ModelManager({
                 <DialogHeader>
                   <DialogTitle>Scan QR Code</DialogTitle>
                 </DialogHeader>
-                <canvas
-                  id="qr-code-canvas"
-                  ref={canvas => canvas && generateQrCode(syncKey, canvas)}
-                ></canvas>
+                <div className="flex justify-center my-4">
+                  <canvas
+                    id="qr-code-canvas"
+                    ref={canvas => canvas && generateQrCode(syncKey, canvas)}
+                  ></canvas>
+                </div>
                 <Input value={syncKey} readOnly />
               </DialogContent>
             </Dialog>
@@ -145,7 +161,7 @@ export function ModelManager({
                   <DialogHeader>
                     <DialogTitle>Scan or Enter Sync Key</DialogTitle>
                   </DialogHeader>
-                  <div id="qr-reader"></div>
+                  <div id="qr-reader" className="my-2"></div>
                   <Input
                     placeholder="Enter sync key manually"
                     value={manualSyncKey}

@@ -1,3 +1,4 @@
+// src/components/PromptList.tsx
 'use client'
 
 import { useState } from 'react'
@@ -29,6 +30,7 @@ import {
 import { Textarea } from './ui/textarea'
 import { MoreHorizontal } from 'lucide-react'
 import { Skeleton } from './ui/skeleton'
+import { cn } from '@/lib/utils'
 
 interface PromptListProps {
   loading: boolean
@@ -39,6 +41,7 @@ interface PromptListProps {
 
 const ITEMS_PER_PAGE = 10
 const NOTE_TRUNCATE_LENGTH = 100;
+const NOTE_MAX_LENGTH = 500;
 
 export function PromptList({
   loading,
@@ -162,12 +165,20 @@ export function PromptList({
                         <DialogHeader>
                           <DialogTitle>Edit Prompt Note</DialogTitle>
                         </DialogHeader>
-                        <Textarea
-                          value={editedNote}
-                          onChange={e => setEditedNote(e.target.value)}
-                          rows={5}
-                          className="my-4"
-                        />
+                        <div className="my-4">
+                          <Textarea
+                            value={editedNote}
+                            onChange={e => setEditedNote(e.target.value)}
+                            rows={5}
+                            maxLength={NOTE_MAX_LENGTH}
+                          />
+                          <div className={cn(
+                              "text-right text-xs mt-1",
+                              editedNote.length >= NOTE_MAX_LENGTH ? "text-red-500" : "text-muted-foreground"
+                          )}>
+                            {editedNote.length} / {NOTE_MAX_LENGTH}
+                          </div>
+                        </div>
                         <DialogFooter>
                           <DialogClose asChild>
                              <Button variant="outline">Cancel</Button>

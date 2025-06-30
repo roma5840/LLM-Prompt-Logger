@@ -1,3 +1,4 @@
+// src/components/PromptLogger.tsx
 'use client'
 
 import { useState } from 'react'
@@ -18,20 +19,29 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { useToast } from '@/hooks/use-toast'
+import { cn } from '@/lib/utils'
 
 interface PromptLoggerProps {
   addPrompt: (model: string, note: string) => void
   models: Model[]
 }
 
+const NOTE_MAX_LENGTH = 500;
+
 export function PromptLogger({ addPrompt, models }: PromptLoggerProps) {
   const [selectedModel, setSelectedModel] = useState('')
   const [note, setNote] = useState('')
+  const { toast } = useToast()
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedModel || !note) {
-      alert('Please select a model and enter a note.')
+      toast({
+        title: "Missing Information",
+        description: "Please select a model and enter a note.",
+        variant: "destructive",
+      })
       return
     }
     addPrompt(selectedModel, note)
@@ -57,12 +67,21 @@ export function PromptLogger({ addPrompt, models }: PromptLoggerProps) {
               ))}
             </SelectContent>
           </Select>
-          <Textarea
-            value={note}
-            onChange={e => setNote(e.target.value)}
-            placeholder="Enter prompt notes or tags..."
-            rows={4}
-          />
+          <div>
+            <Textarea
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              placeholder="Enter prompt notes or tags..."
+              rows={4}
+              maxLength={NOTE_MAX_LENGTH}
+            />
+            <div className={cn(
+                "text-right text-xs mt-1",
+                note.length >= NOTE_MAX_LENGTH ? "text-red-500" : "text-muted-foreground"
+            )}>
+              {note.length} / {NOTE_MAX_LENGTH}
+            </div>
+          </div>
         </CardContent>
         <CardFooter>
           <Button type="submit" className="w-full">
