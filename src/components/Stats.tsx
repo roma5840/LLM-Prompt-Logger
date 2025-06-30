@@ -2,7 +2,7 @@
 'use client'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, LineChart, Line, CartesianGrid } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, LineChart, Line, CartesianGrid, Cell } from 'recharts'
 import { Prompt, Model } from '@/lib/types'
 import { useMemo } from 'react'
 import { Skeleton } from './ui/skeleton'
@@ -22,6 +22,14 @@ const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#0088FE', '#00C49F'
 export function Stats({ history, models }: StatsProps) {
   const totalPrompts = history.length
   const dailyPrompts = history.filter(p => new Date(p.timestamp) >= getStartOfToday()).length
+
+  const modelColorMap = useMemo(() => {
+    const map = new Map<string, string>();
+    models.forEach((model, i) => {
+        map.set(model, COLORS[i % COLORS.length]);
+    });
+    return map;
+  }, [models]);
 
   const modelCounts = useMemo(() => {
     const counts: { [key: string]: number } = {}
@@ -84,7 +92,11 @@ export function Stats({ history, models }: StatsProps) {
                 <XAxis type="number" hide />
                 <YAxis type="category" dataKey="name" width={100} stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false}/>
                 <Tooltip cursor={{ fill: 'hsl(var(--accent))' }} contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} />
-                <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+                  {modelCounts.map((entry) => (
+                    <Cell key={`cell-${entry.name}`} fill={modelColorMap.get(entry.name) || '#8884d8'} />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -105,8 +117,8 @@ export function Stats({ history, models }: StatsProps) {
                 <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
                 <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} />
                 <Legend />
-                {models.map((model, i) => (
-                  <Line key={model} type="monotone" dataKey={model} stroke={COLORS[i % COLORS.length]} dot={false} strokeWidth={2} />
+                {models.map((model) => (
+                  <Line key={model} type="monotone" dataKey={model} stroke={modelColorMap.get(model)} dot={false} strokeWidth={2} />
                 ))}
               </LineChart>
             </ResponsiveContainer>

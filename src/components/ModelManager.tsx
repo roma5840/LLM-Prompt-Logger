@@ -111,11 +111,10 @@ export function ModelManager({
                 key={model}
                 className="flex justify-between items-center text-sm p-2 rounded-md hover:bg-accent"
               >
-                <span className="break-all">{model}</span>
+                <span className="break-all pr-2">{model}</span>
                 <Button
-                  variant="ghost"
+                  variant="destructive"
                   size="sm"
-                  className="w-6 h-6 p-0"
                   onClick={() => handleRemoveModel(model)}
                 >
                   X
