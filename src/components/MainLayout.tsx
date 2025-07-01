@@ -1,13 +1,23 @@
 // src/components/MainLayout.tsx
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { SidebarProvider, Sidebar, SidebarTrigger, SidebarContent, SidebarHeader, SidebarFooter, useSidebar } from '@/components/ui/sidebar'
 import { PromptLogger } from '@/components/PromptLogger'
-import { ModelManager } from '@/components/ModelManager'
 import { useData } from '@/hooks/use-data'
-import { BotMessageSquare } from 'lucide-react'
+import { BotMessageSquare, LayoutDashboard, Settings, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Separator } from './ui/separator'
 
 function MainContent({ children }: { children: React.ReactNode }) {
   const { state, isMobile } = useSidebar()
@@ -40,8 +50,39 @@ function MainContent({ children }: { children: React.ReactNode }) {
   )
 }
 
+function NavLinks() {
+  const pathname = usePathname();
+  const links = [
+    { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/settings', label: 'Settings', icon: Settings },
+  ];
+
+  return (
+    <nav className="flex flex-col gap-1">
+      {links.map(link => {
+        const Icon = link.icon;
+        const isActive = pathname === link.href;
+        return (
+          <Button
+            key={link.href}
+            asChild
+            variant={isActive ? 'secondary' : 'ghost'}
+            className="w-full justify-start"
+          >
+            <Link href={link.href}>
+              <Icon className="mr-2 h-4 w-4" />
+              {link.label}
+            </Link>
+          </Button>
+        );
+      })}
+    </nav>
+  );
+}
+
 export function MainLayout({ children }: { children: React.ReactNode }) {
   const data = useData()
+  const [isLoggerOpen, setIsLoggerOpen] = useState(false);
 
   return (
     <SidebarProvider>
@@ -54,22 +95,31 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
             </div>
           </SidebarHeader>
           <SidebarContent className="p-4">
-            <div className="flex flex-col gap-6">
-              <PromptLogger addPrompt={data.addPrompt} models={data.models} />
-              <ModelManager
-                models={data.models}
-                history={data.history}
-                updateUserModels={data.updateUserModels}
-                syncKey={data.syncKey}
-                migrateToCloud={data.migrateToCloud}
-                linkDeviceWithKey={data.linkDeviceWithKey}
-                handleExportData={data.handleExportData}
-                handleImportData={data.handleImportData}
-              />
+            <div className="flex flex-col gap-4">
+               <Dialog open={isLoggerOpen} onOpenChange={setIsLoggerOpen}>
+                <DialogTrigger asChild>
+                  <Button className="w-full">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Log New Prompt
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Log a New Prompt</DialogTitle>
+                  </DialogHeader>
+                  <PromptLogger
+                    addPrompt={data.addPrompt}
+                    models={data.models}
+                    onPromptLogged={() => setIsLoggerOpen(false)}
+                  />
+                </DialogContent>
+              </Dialog>
+              <Separator />
+              <NavLinks />
             </div>
           </SidebarContent>
           <SidebarFooter className="p-4 text-xs text-muted-foreground">
-            Version 1.3.3
+            Version 1.3.4
           </SidebarFooter>
         </Sidebar>
         
