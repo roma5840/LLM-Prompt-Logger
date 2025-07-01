@@ -59,6 +59,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
               <PromptLogger addPrompt={data.addPrompt} models={data.models} />
               <ModelManager
                 models={data.models}
+                history={data.history}
                 updateUserModels={data.updateUserModels}
                 syncKey={data.syncKey}
                 migrateToCloud={data.migrateToCloud}
@@ -69,7 +70,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
             </div>
           </SidebarContent>
           <SidebarFooter className="p-4 text-xs text-muted-foreground">
-            Version 1.2.2
+            Version 1.3.0
           </SidebarFooter>
         </Sidebar>
         

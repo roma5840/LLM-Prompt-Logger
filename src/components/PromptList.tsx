@@ -41,7 +41,7 @@ interface PromptListProps {
 
 const ITEMS_PER_PAGE = 10
 const NOTE_TRUNCATE_LENGTH = 100;
-const NOTE_MAX_LENGTH = 500;
+const NOTE_MAX_LENGTH = 1500;
 
 const DOTS = '...';
 

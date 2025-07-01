@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { Model } from '@/lib/types'
+import { useState, useMemo } from 'react'
+import { Model, Prompt } from '@/lib/types'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -38,6 +38,7 @@ import { cn } from '@/lib/utils'
 
 interface ModelManagerProps {
   models: Model[]
+  history: Prompt[]
   updateUserModels: (models: Model[]) => void
   syncKey: string | null
   migrateToCloud: () => Promise<void>
@@ -51,6 +52,7 @@ const MODEL_LIMIT = 10;
 
 export function ModelManager({
   models,
+  history,
   updateUserModels,
   syncKey,
   migrateToCloud: migrateToCloudProp,
@@ -66,6 +68,28 @@ export function ModelManager({
   const [fileToImport, setFileToImport] = useState<File | null>(null)
 
   const isModelLimitReached = models.length >= MODEL_LIMIT;
+
+  const estimatedStorage = useMemo(() => {
+    if (!syncKey || !history) return 0;
+    const totalBytes = history.reduce((acc, prompt) => {
+        const modelBytes = new TextEncoder().encode(prompt.model).length;
+        const noteBytes = new TextEncoder().encode(prompt.note).length;
+        const overheadBytes = 56;
+        return acc + modelBytes + noteBytes + overheadBytes;
+    }, 0);
+    return totalBytes;
+  }, [history, syncKey]);
+
+  const formatBytes = (bytes: number, decimals = 2) => {
+    if (!+bytes) return '0 Bytes'
+    const k = 1024
+    const dm = decimals < 0 ? 0 : decimals
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`
+  }
+  
+  const formattedSize = formatBytes(estimatedStorage);
 
   const handleAddModel = () => {
     if (newModel && !models.includes(newModel) && !isModelLimitReached) {
@@ -333,7 +357,7 @@ export function ModelManager({
         <AccordionItem value="data-management">
           <AccordionTrigger>Data Management</AccordionTrigger>
           <AccordionContent>
-            <div className="space-y-2">
+            <div className="space-y-4">
               <Button onClick={handleExportData} className="w-full">
                 Export Data
               </Button>
@@ -350,6 +374,12 @@ export function ModelManager({
                 }}
                 className="w-full"
               />
+              {syncKey && history.length > 0 && (
+                <div className="text-xs text-center text-muted-foreground p-2 border rounded-md bg-muted/50">
+                  <p>Estimated Cloud Storage: <span className="font-semibold">{formattedSize}</span></p>
+                  <p className="mt-1">Based on {history.length} synced prompts.</p>
+                </div>
+              )}
             </div>
           </AccordionContent>
         </AccordionItem>

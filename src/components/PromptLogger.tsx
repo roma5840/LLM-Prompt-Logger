@@ -27,7 +27,7 @@ interface PromptLoggerProps {
   models: Model[]
 }
 
-const NOTE_MAX_LENGTH = 500;
+const NOTE_MAX_LENGTH = 1500;
 
 export function PromptLogger({ addPrompt, models }: PromptLoggerProps) {
   const [selectedModel, setSelectedModel] = useState('')

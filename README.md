@@ -8,7 +8,7 @@
   <a href="https://promptlog.romaquino.com">
     <img src="https://img.shields.io/badge/Live%20Demo-promptlog.romaquino.com-brightgreen?style=for-the-badge&logo=vercel" alt="Live Demo"/>
   </a>
-  <img src="https://img.shields.io/github/license/roma5840/LLM-Prompt-Logger?style=for-the-badge&cacheSeconds=1" alt="License"/>
+  <img src="https://img.shields.io/github/license/roma5840/LLM-Prompt-Logger?style=for-the-badge" alt="License"/>
 </div>
 
 ## About
