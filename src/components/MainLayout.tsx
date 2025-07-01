@@ -17,28 +17,21 @@ function MainContent({ children }: { children: React.ReactNode }) {
   return (
     <div className={cn(
       "flex-1 flex flex-col transition-all duration-200 ease-linear",
-      // On desktop, when sidebar is collapsed, we want full width centering
       !isMobile && isCollapsed && "ml-0",
-      // On desktop, when sidebar is expanded, we add margin to account for sidebar
       !isMobile && !isCollapsed && "ml-4"
     )}>
       <header className="p-4 border-b flex items-center justify-between sticky top-0 bg-background/80 backdrop-blur-sm z-10">
         <SidebarTrigger />
       </header>
-      
-      {/* This is the key container that handles centering vs left-alignment */}
+
       <div className={cn(
         "flex-1 transition-all duration-200 ease-linear",
-        // When collapsed: center the content with max width and padding
         isCollapsed && "flex justify-center px-8",
-        // When expanded: align to left with margin from sidebar
         !isCollapsed && "flex justify-start pl-8 pr-8"
       )}>
         <div className={cn(
           "w-full transition-all duration-200 ease-linear",
-          // Constrain width when centered
           isCollapsed && "max-w-7xl",
-          // Full width when sidebar is open
           !isCollapsed && "max-w-none"
         )}>
           {children}
