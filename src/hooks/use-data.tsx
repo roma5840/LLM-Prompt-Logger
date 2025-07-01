@@ -11,13 +11,14 @@ interface DataContextType {
   models: Model[];
   syncKey: string | null;
   loading: boolean;
+  syncing: boolean;
   addPrompt: (model: string, note: string) => Promise<void>;
   updatePromptNote: (id: number, note: string) => Promise<void>;
   deletePrompt: (id: number) => Promise<void>;
   deleteAllPrompts: () => Promise<void>;
   updateUserModels: (newModels: Model[]) => Promise<void>;
   migrateToCloud: () => Promise<void>;
-  linkDeviceWithKey: (key: string) => Promise<boolean>;
+  linkDeviceWithKey: (key: string) => Promise<void>;
   handleExportData: () => Promise<void>;
   handleImportData: (file: File) => Promise<void>;
   setHistory: React.Dispatch<React.SetStateAction<Prompt[]>>;
@@ -39,6 +40,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [models, setModels] = useState<Model[]>(DEFAULT_MODELS)
   const [syncKey, setSyncKey] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [syncing, setSyncing] = useState(false)
 
   const loadDataFromLocalStorage = useCallback(() => {
     const localHistory = localStorage.getItem(LOCAL_HISTORY_STORAGE)
@@ -214,57 +216,58 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   }
 
   const migrateToCloud = async () => {
-    if (!confirm('Enable Cloud Sync? This will upload your local data to a new, secure cloud account.')) return
+    setSyncing(true)
+    try {
+      const localModels = JSON.parse(localStorage.getItem(LOCAL_MODELS_STORAGE) || JSON.stringify(DEFAULT_MODELS))
+      const localHistory = JSON.parse(localStorage.getItem(LOCAL_HISTORY_STORAGE) || '[]')
 
-    const localModels = JSON.parse(localStorage.getItem(LOCAL_MODELS_STORAGE) || JSON.stringify(DEFAULT_MODELS))
-    const localHistory = JSON.parse(localStorage.getItem(LOCAL_HISTORY_STORAGE) || '[]')
-
-    const { data: newKey, error: createError } = await supabase.rpc('create_new_bucket', { p_models: localModels })
-    if (createError || !newKey) {
-      console.error('Error creating new session:', createError)
-      alert('Could not enable sync. Please try again.')
-      return
-    }
-
-    if (localHistory.length > 0) {
-      for (const entry of localHistory) {
-        await supabase.rpc('add_new_prompt', {
-          p_bucket_id: newKey,
-          p_model: entry.model,
-          p_note: entry.note,
-          p_timestamp: new Date(entry.timestamp).toISOString(),
-        })
+      const { data: newKey, error: createError } = await supabase.rpc('create_new_bucket', { p_models: localModels })
+      if (createError || !newKey) {
+        console.error('Error creating new session:', createError)
+        throw new Error('Could not enable sync. Please try again.')
       }
-    }
 
-    setSyncKey(newKey)
-    localStorage.setItem(SYNC_KEY_STORAGE, newKey)
-    localStorage.removeItem(LOCAL_HISTORY_STORAGE)
-    localStorage.removeItem(LOCAL_MODELS_STORAGE)
-    await loadDataFromSupabase(newKey)
-    alert('Cloud sync enabled!')
+      if (localHistory.length > 0) {
+        for (const entry of localHistory) {
+          await supabase.rpc('add_new_prompt', {
+            p_bucket_id: newKey,
+            p_model: entry.model,
+            p_note: entry.note,
+            p_timestamp: new Date(entry.timestamp).toISOString(),
+          })
+        }
+      }
+
+      setSyncKey(newKey)
+      localStorage.setItem(SYNC_KEY_STORAGE, newKey)
+      localStorage.removeItem(LOCAL_HISTORY_STORAGE)
+      localStorage.removeItem(LOCAL_MODELS_STORAGE)
+      await loadDataFromSupabase(newKey)
+    } finally {
+      setSyncing(false)
+    }
   }
 
   const linkDeviceWithKey = async (key: string) => {
     if (!key || key.length < 36) {
-      alert('Invalid Sync Key format.')
-      return false
+      throw new Error('Invalid Sync Key format.')
     }
-    setLoading(true)
-    const { data, error } = await supabase.rpc('get_my_bucket_data', { p_bucket_id: key })
-    if (error || !data || data.length === 0) {
-      console.error('Error verifying sync key:', error)
-      alert('Sync Key not found.')
-      setLoading(false)
-      return false
-    }
+    setSyncing(true)
+    try {
+      const { data, error } = await supabase.rpc('get_my_bucket_data', { p_bucket_id: key })
+      if (error || !data || data.length === 0) {
+        console.error('Error verifying sync key:', error)
+        throw new Error('Sync Key not found.')
+      }
 
-    localStorage.removeItem(LOCAL_HISTORY_STORAGE)
-    localStorage.removeItem(LOCAL_MODELS_STORAGE)
-    localStorage.setItem(SYNC_KEY_STORAGE, key)
-    setSyncKey(key)
-    await loadDataFromSupabase(key)
-    return true
+      localStorage.removeItem(LOCAL_HISTORY_STORAGE)
+      localStorage.removeItem(LOCAL_MODELS_STORAGE)
+      localStorage.setItem(SYNC_KEY_STORAGE, key)
+      setSyncKey(key)
+      await loadDataFromSupabase(key)
+    } finally {
+      setSyncing(false)
+    }
   }
   
   const handleExportData = async () => {
@@ -310,6 +313,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 }
 
   const handleImportData = async (file: File) => {
+    setSyncing(true)
     try {
         const text = await file.text()
         const importedData = JSON.parse(text)
@@ -317,46 +321,39 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             throw new Error('Invalid file format.');
         }
         
-        const message = syncKey 
-            ? 'This will overwrite all current cloud data with the contents of this file. Are you sure?'
-            : 'This will overwrite all your local data with the contents of this file. Are you sure?';
-
-        if (confirm(message)) {
-            if (syncKey) {
-                setLoading(true)
-                await supabase.rpc('delete_all_my_prompts', { p_bucket_id: syncKey })
-                await supabase.rpc('update_my_models', { p_bucket_id: syncKey, p_new_models: importedData.models })
-                if (importedData.history.length > 0) {
-                    for (const entry of importedData.history) {
-                        await supabase.rpc('add_new_prompt', { 
-                            p_bucket_id: syncKey, 
-                            p_model: entry.model, 
-                            p_note: entry.note,
-                            p_timestamp: entry.timestamp
-                        });
-                    }
+        if (syncKey) {
+            await supabase.rpc('delete_all_my_prompts', { p_bucket_id: syncKey })
+            await supabase.rpc('update_my_models', { p_bucket_id: syncKey, p_new_models: importedData.models })
+            if (importedData.history.length > 0) {
+                for (const entry of importedData.history) {
+                    await supabase.rpc('add_new_prompt', { 
+                        p_bucket_id: syncKey, 
+                        p_model: entry.model, 
+                        p_note: entry.note,
+                        p_timestamp: entry.timestamp
+                    });
                 }
-                const promptsChannel = supabase.channel(`prompts-changes-for-${syncKey}`)
-                await promptsChannel.send({ type: 'broadcast', event: 'prompts_changed', payload: {} })
-                const modelsChannel = supabase.channel(`models-changes-for-${syncKey}`)
-                await modelsChannel.send({ type: 'broadcast', event: 'models_changed', payload: {} })
-                
-                await loadDataFromSupabase(syncKey)
-                alert('Data imported successfully!');
-
-            } else {
-                setModels(importedData.models)
-                setHistory(importedData.history.map((entry: any) => ({
-                    ...entry,
-                    id: Date.now() + Math.random(),
-                    timestamp: new Date(entry.timestamp)
-                })).sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()))
-                alert('Data imported successfully!');
             }
+            const promptsChannel = supabase.channel(`prompts-changes-for-${syncKey}`)
+            await promptsChannel.send({ type: 'broadcast', event: 'prompts_changed', payload: {} })
+            const modelsChannel = supabase.channel(`models-changes-for-${syncKey}`)
+            await modelsChannel.send({ type: 'broadcast', event: 'models_changed', payload: {} })
+            
+            await loadDataFromSupabase(syncKey)
+
+        } else {
+            setModels(importedData.models)
+            setHistory(importedData.history.map((entry: any) => ({
+                ...entry,
+                id: Date.now() + Math.random(),
+                timestamp: new Date(entry.timestamp)
+            })).sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()))
         }
     } catch (error: any) {
-        alert(`Error importing data: ${error.message}`);
         console.error("Import error:", error);
+        throw new Error(error.message || 'An unknown error occurred during import.');
+    } finally {
+        setSyncing(false)
     }
   }
 
@@ -365,6 +362,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     models,
     syncKey,
     loading,
+    syncing,
     addPrompt,
     updatePromptNote,
     deletePrompt,
