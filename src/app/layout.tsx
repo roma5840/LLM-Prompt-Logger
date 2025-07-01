@@ -5,6 +5,7 @@ import './globals.css'
 import { ThemeProvider } from "@/components/theme-provider"
 import { DataProvider } from '@/hooks/use-data'
 import { MainLayout } from '@/components/MainLayout'
+import { Analytics } from "@vercel/analytics/next"
 
 const inter = Inter({ subsets: ['latin'] })
 
