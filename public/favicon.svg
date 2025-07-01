@@ -1,0 +1,18 @@
+
+<svg
+  width="100"
+  height="100"
+  viewBox="0 0 24 24"
+  fill="none"
+  xmlns="http://www.w3.org/2000/svg"
+  aria-label="PromptLog Favicon"
+>
+
+  <path
+    d="M12 6V2H2v12h4v4l4-4h4a2 2 0 0 0 2-2V6h-4Z"
+    fill="hsl(262, 52%, 51%)"
+  />
+
+  <circle cx="9" cy="9" r="1" fill="hsl(0, 0%, 98%)" />
+  <circle cx="15" cy="9" r="1" fill="hsl(0, 0%, 98%)" />
+</svg>
