@@ -10,6 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { DateRangePicker } from '@/components/ui/date-range-picker'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Search } from 'lucide-react'
 
 const getDefaultDateRange = (): DateRange => {
   const to = new Date();
@@ -22,8 +24,10 @@ export default function Home() {
   const data = useData()
   const [filterModel, setFilterModel] = useState<string>('all')
   const [dateRange, setDateRange] = useState<DateRange | undefined>(getDefaultDateRange())
+  const [searchQuery, setSearchQuery] = useState('')
 
   const filteredHistory = useMemo(() => {
+    const query = searchQuery.toLowerCase();
     return data.history
       .filter(p => {
         if (filterModel === 'all') return true
@@ -39,11 +43,19 @@ export default function Home() {
         if (to) return timestamp <= to
         return true
       })
-  }, [data.history, filterModel, dateRange])
+      .filter(p => {
+        if (!query) return true;
+        return (
+          p.model.toLowerCase().includes(query) ||
+          p.note.toLowerCase().includes(query)
+        );
+      })
+  }, [data.history, filterModel, dateRange, searchQuery])
 
   const clearFilters = () => {
     setFilterModel('all')
     setDateRange(undefined)
+    setSearchQuery('')
   }
 
   return (
@@ -72,8 +84,18 @@ export default function Home() {
       <Stats history={filteredHistory} models={data.models} />
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>Prompt History</CardTitle>
+          <div className="relative w-full sm:w-auto">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="search"
+              placeholder="Search in notes & models..."
+              className="w-full rounded-lg bg-background pl-8 sm:w-[200px] lg:w-[250px]"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
         </CardHeader>
         <CardContent>
           <PromptList
