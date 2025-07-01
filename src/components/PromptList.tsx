@@ -1,7 +1,7 @@
 // src/components/PromptList.tsx
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Prompt } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import {
@@ -43,6 +43,58 @@ const ITEMS_PER_PAGE = 10
 const NOTE_TRUNCATE_LENGTH = 100;
 const NOTE_MAX_LENGTH = 500;
 
+const DOTS = '...';
+
+const usePagination = ({
+  totalCount,
+  pageSize,
+  siblingCount = 1,
+  currentPage,
+}: { totalCount: number, pageSize: number, siblingCount?: number, currentPage: number }) => {
+  const paginationRange = useMemo(() => {
+    const totalPageCount = Math.ceil(totalCount / pageSize);
+
+    const totalPageNumbers = siblingCount + 5;
+
+    if (totalPageNumbers >= totalPageCount) {
+      return Array.from({ length: totalPageCount }, (_, i) => i + 1);
+    }
+
+    const leftSiblingIndex = Math.max(currentPage - siblingCount, 1);
+    const rightSiblingIndex = Math.min(
+      currentPage + siblingCount,
+      totalPageCount
+    );
+
+    const shouldShowLeftDots = leftSiblingIndex > 2;
+    const shouldShowRightDots = rightSiblingIndex < totalPageCount - 2;
+
+    const firstPageIndex = 1;
+    const lastPageIndex = totalPageCount;
+
+    if (!shouldShowLeftDots && shouldShowRightDots) {
+      let leftItemCount = 3 + 2 * siblingCount;
+      let leftRange = Array.from({ length: leftItemCount }, (_, i) => i + 1);
+
+      return [...leftRange, DOTS, totalPageCount];
+    }
+
+    if (shouldShowLeftDots && !shouldShowRightDots) {
+      let rightItemCount = 3 + 2 * siblingCount;
+      let rightRange = Array.from({ length: rightItemCount }, (_, i) => totalPageCount - rightItemCount + i + 1);
+      return [firstPageIndex, DOTS, ...rightRange];
+    }
+
+    if (shouldShowLeftDots && shouldShowRightDots) {
+      let middleRange = Array.from({ length: rightSiblingIndex - leftSiblingIndex + 1 }, (_, i) => leftSiblingIndex + i);
+      return [firstPageIndex, DOTS, ...middleRange, DOTS, lastPageIndex];
+    }
+  }, [totalCount, pageSize, siblingCount, currentPage]);
+
+  return paginationRange;
+};
+
+
 export function PromptList({
   loading,
   history,
@@ -59,6 +111,12 @@ export function PromptList({
   )
 
   const totalPages = Math.ceil(history.length / ITEMS_PER_PAGE)
+
+  const paginationRange = usePagination({
+    currentPage,
+    totalCount: history.length,
+    pageSize: ITEMS_PER_PAGE,
+  });
 
   const handleEdit = (prompt: Prompt) => {
     setEditingPrompt(prompt)
@@ -197,23 +255,40 @@ export function PromptList({
         </Table>
       </div>
       {totalPages > 1 && (
-        <div className="flex justify-between items-center">
+        <div className="flex justify-center items-center space-x-1 pt-4">
           <Button
             variant="outline"
             size="sm"
             disabled={currentPage === 1}
-            onClick={() => setCurrentPage(p => p - 1)}
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
           >
             Previous
           </Button>
-          <span className="text-sm text-muted-foreground">
-            Page {currentPage} of {totalPages}
-          </span>
+          {paginationRange?.map((pageNumber, index) => {
+            if (pageNumber === DOTS) {
+              return (
+                <span key={`dots-${index}`} className="flex h-9 w-9 items-center justify-center text-sm">
+                  …
+                </span>
+              );
+            }
+            return (
+              <Button
+                key={pageNumber}
+                variant={currentPage === pageNumber ? 'default' : 'ghost'}
+                size="sm"
+                className="h-9 w-9"
+                onClick={() => setCurrentPage(pageNumber as number)}
+              >
+                {pageNumber}
+              </Button>
+            );
+          })}
           <Button
             variant="outline"
             size="sm"
             disabled={currentPage === totalPages}
-            onClick={() => setCurrentPage(p => p + 1)}
+            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
           >
             Next
           </Button>
