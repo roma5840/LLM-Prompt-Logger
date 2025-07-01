@@ -146,6 +146,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       if (error) {
         console.error('Error adding prompt:', error)
         setHistory(prev => prev.filter(p => p.id !== optimisticPrompt.id))
+        throw new Error("Failed to log prompt. The server might be unreachable.");
       } else {
         await refreshDataFromSupabase(syncKey); // Use refresh to avoid loading state
         const promptsChannel = supabase.channel(`prompts-changes-for-${syncKey}`)

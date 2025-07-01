@@ -72,6 +72,11 @@ function NavLinks() {
 export function MainLayout({ children }: { children: React.ReactNode }) {
   const data = useData()
   const [isLoggerOpen, setIsLoggerOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handlePromptLogged = () => {
+    setIsLoggerOpen(false);
+  };
 
   return (
     <SidebarProvider>
@@ -85,21 +90,35 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
           </SidebarHeader>
           <SidebarContent className="p-4">
             <div className="flex flex-col gap-4">
-               <Dialog open={isLoggerOpen} onOpenChange={setIsLoggerOpen}>
+               <Dialog open={isLoggerOpen} onOpenChange={isSubmitting ? () => {} : setIsLoggerOpen}>
                 <DialogTrigger asChild>
                   <Button className="w-full">
                     <Plus className="mr-2 h-4 w-4" />
                     Log New Prompt
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-md">
+                <DialogContent
+                  className="sm:max-w-md"
+                  onInteractOutside={(e) => {
+                    if (isSubmitting) {
+                      e.preventDefault();
+                    }
+                  }}
+                   onEscapeKeyDown={(e) => {
+                    if (isSubmitting) {
+                      e.preventDefault();
+                    }
+                  }}
+                >
                   <DialogHeader>
                     <DialogTitle>Log a New Prompt</DialogTitle>
                   </DialogHeader>
                   <PromptLogger
                     addPrompt={data.addPrompt}
                     models={data.models}
-                    onPromptLogged={() => setIsLoggerOpen(false)}
+                    onPromptLogged={handlePromptLogged}
+                    isSubmitting={isSubmitting}
+                    setIsSubmitting={setIsSubmitting}
                   />
                 </DialogContent>
               </Dialog>
@@ -108,7 +127,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
             </div>
           </SidebarContent>
           <SidebarFooter className="p-4 text-xs text-muted-foreground">
-            Version 1.3.8
+            Version 1.3.9
           </SidebarFooter>
         </Sidebar>
         
