@@ -63,26 +63,27 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     localStorage.setItem(LOCAL_MODELS_STORAGE, JSON.stringify(models))
   }, [history, models, syncKey])
 
+  const refreshDataFromSupabase = useCallback(async (key: string) => {
+    const { data: bucketData, error: bucketError } = await supabase.rpc('get_my_bucket_data', { p_bucket_id: key });
+    if (bucketError || !bucketData || bucketData.length === 0) {
+      console.error('Error refreshing models:', bucketError);
+      return;
+    }
+    setModels(bucketData[0].models || [...DEFAULT_MODELS]);
+
+    const { data: promptsData, error: promptsError } = await supabase.rpc('get_my_prompts', { p_bucket_id: key });
+    if (promptsError) {
+      console.error('Error refreshing prompts:', promptsError);
+    } else {
+      setHistory(promptsData.map((p: any) => ({ ...p, timestamp: new Date(p.timestamp) })));
+    }
+  }, []);
+
   const loadDataFromSupabase = useCallback(async (key: string) => {
     setLoading(true)
-    const { data: bucketData, error: bucketError } = await supabase.rpc('get_my_bucket_data', { p_bucket_id: key })
-    if (bucketError || !bucketData || bucketData.length === 0) {
-      console.error('Error fetching models:', bucketError)
-      setSyncKey(null)
-      localStorage.removeItem(SYNC_KEY_STORAGE)
-      loadDataFromLocalStorage()
-      return
-    }
-    setModels(bucketData[0].models || [...DEFAULT_MODELS])
-
-    const { data: promptsData, error: promptsError } = await supabase.rpc('get_my_prompts', { p_bucket_id: key })
-    if (promptsError) {
-      console.error('Error fetching prompts:', promptsError)
-    } else {
-      setHistory(promptsData.map((p: any) => ({ ...p, timestamp: new Date(p.timestamp) })))
-    }
+    await refreshDataFromSupabase(key);
     setLoading(false)
-  }, [loadDataFromLocalStorage])
+  }, [refreshDataFromSupabase])
 
   useEffect(() => {
     const key = localStorage.getItem(SYNC_KEY_STORAGE)
@@ -122,19 +123,19 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
     const promptsChannel = supabase
       .channel(`prompts-changes-for-${syncKey}`)
-      .on('broadcast', { event: 'prompts_changed' }, () => loadDataFromSupabase(syncKey))
+      .on('broadcast', { event: 'prompts_changed' }, () => refreshDataFromSupabase(syncKey))
       .subscribe()
       
     const modelsChannel = supabase
       .channel(`models-changes-for-${syncKey}`)
-      .on('broadcast', { event: 'models_changed' }, () => loadDataFromSupabase(syncKey))
+      .on('broadcast', { event: 'models_changed' }, () => refreshDataFromSupabase(syncKey))
       .subscribe()
 
     return () => {
       supabase.removeChannel(promptsChannel)
       supabase.removeChannel(modelsChannel)
     }
-  }, [syncKey, loadDataFromSupabase])
+  }, [syncKey, refreshDataFromSupabase])
 
 
   const addPrompt = async (model: string, note: string) => {
@@ -146,7 +147,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         console.error('Error adding prompt:', error)
         setHistory(prev => prev.filter(p => p.id !== optimisticPrompt.id))
       } else {
-        await loadDataFromSupabase(syncKey);
+        await refreshDataFromSupabase(syncKey); // Use refresh to avoid loading state
         const promptsChannel = supabase.channel(`prompts-changes-for-${syncKey}`)
         await promptsChannel.send({ type: 'broadcast', event: 'prompts_changed', payload: {} })
       }
@@ -162,7 +163,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       const { error } = await supabase.rpc('update_my_prompt_note', { p_prompt_id: promptId, p_bucket_id: syncKey, p_new_note: newNote })
       if (error) {
         console.error('Error updating note:', error)
-        loadDataFromSupabase(syncKey) // Revert optimistic update
+        refreshDataFromSupabase(syncKey) // Revert optimistic update
       } else {
         const promptsChannel = supabase.channel(`prompts-changes-for-${syncKey}`)
         await promptsChannel.send({ type: 'broadcast', event: 'prompts_changed', payload: {} })
@@ -242,7 +243,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       localStorage.setItem(SYNC_KEY_STORAGE, newKey)
       localStorage.removeItem(LOCAL_HISTORY_STORAGE)
       localStorage.removeItem(LOCAL_MODELS_STORAGE)
-      await loadDataFromSupabase(newKey)
+      await refreshDataFromSupabase(newKey)
     } finally {
       setSyncing(false)
     }
@@ -264,7 +265,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       localStorage.removeItem(LOCAL_MODELS_STORAGE)
       localStorage.setItem(SYNC_KEY_STORAGE, key)
       setSyncKey(key)
-      await loadDataFromSupabase(key)
+      await refreshDataFromSupabase(key)
     } finally {
       setSyncing(false)
     }
@@ -339,7 +340,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             const modelsChannel = supabase.channel(`models-changes-for-${syncKey}`)
             await modelsChannel.send({ type: 'broadcast', event: 'models_changed', payload: {} })
             
-            await loadDataFromSupabase(syncKey)
+            await refreshDataFromSupabase(syncKey)
 
         } else {
             setModels(importedData.models)
