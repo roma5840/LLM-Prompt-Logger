@@ -45,7 +45,7 @@ Follow these instructions to get a copy of the project up and running on your lo
 
 ### Prerequisites
 
--   [Node.js](https://nodejs.org/) (v18.0 or later)
+-   [Node.js](https://nodejs.org/)
 -   [npm](https://www.npmjs.com/), [yarn](https://yarnpkg.com/), or [pnpm](https://pnpm.io/)
 
 ### Installation

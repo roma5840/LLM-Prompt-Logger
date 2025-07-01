@@ -6,7 +6,6 @@ import { SidebarProvider, Sidebar, SidebarTrigger, SidebarContent, SidebarHeader
 import { PromptLogger } from '@/components/PromptLogger'
 import { ModelManager } from '@/components/ModelManager'
 import { useData } from '@/hooks/use-data'
-import { Toaster } from '@/components/ui/toaster'
 import { BotMessageSquare } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -70,7 +69,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
             </div>
           </SidebarContent>
           <SidebarFooter className="p-4 text-xs text-muted-foreground">
-            Version 1.3.2
+            Version 1.3.3
           </SidebarFooter>
         </Sidebar>
         
@@ -78,7 +77,6 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
           {children}
         </MainContent>
       </div>
-      <Toaster />
     </SidebarProvider>
   )
 }

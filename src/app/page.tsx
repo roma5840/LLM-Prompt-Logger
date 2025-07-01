@@ -1,17 +1,19 @@
 // src/app/page.tsx
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import type { DateRange } from "react-day-picker"
 import { useData } from '@/hooks/use-data'
 import { Stats } from '@/components/Stats'
 import { PromptList } from '@/components/PromptList'
+import { Welcome } from '@/components/Welcome'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { DateRangePicker } from '@/components/ui/date-range-picker'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Search } from 'lucide-react'
+import { Search, Loader2 } from 'lucide-react'
+import { MainLayout } from '@/components/MainLayout'
 
 const getDefaultDateRange = (): DateRange => {
   const to = new Date();
@@ -20,11 +22,33 @@ const getDefaultDateRange = (): DateRange => {
   return { from, to };
 };
 
+const WELCOME_DISMISSED_KEY = 'promptlog_welcome_dismissed';
+
 export default function Home() {
   const data = useData()
   const [filterModel, setFilterModel] = useState<string>('all')
   const [dateRange, setDateRange] = useState<DateRange | undefined>(getDefaultDateRange())
   const [searchQuery, setSearchQuery] = useState('')
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(true);
+
+  useEffect(() => {
+    if (data.loading) {
+      return;
+    }
+    const welcomeDismissed = localStorage.getItem(WELCOME_DISMISSED_KEY);
+    const isNewUser = data.history.length === 0 && !data.syncKey;
+
+    if (isNewUser && !welcomeDismissed) {
+      setShowWelcome(true);
+    }
+    setIsCheckingOnboarding(false);
+  }, [data.loading, data.history, data.syncKey]);
+
+  const handleGetStarted = () => {
+    localStorage.setItem(WELCOME_DISMISSED_KEY, 'true');
+    setShowWelcome(false);
+  };
 
   const filteredHistory = useMemo(() => {
     const query = searchQuery.toLowerCase();
@@ -57,55 +81,66 @@ export default function Home() {
     setDateRange(undefined)
     setSearchQuery('')
   }
-
-  return (
-    <main className="flex-1 p-4 md:p-6 lg:p-8 flex flex-col gap-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Dashboard</h1>
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-          <Select value={filterModel} onValueChange={setFilterModel}>
-            <SelectTrigger className="w-full sm:w-[180px]">
-              <SelectValue placeholder="Filter by model" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Models</SelectItem>
-              {data.models.map(model => (
-                <SelectItem key={model} value={model}>
-                  {model}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <DateRangePicker date={dateRange} setDate={setDateRange} />
-          <Button variant="ghost" onClick={clearFilters}>Clear</Button>
-        </div>
+  if (isCheckingOnboarding) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
-
-      <Stats history={filteredHistory} models={data.models} />
-
-      <Card>
-        <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle>Prompt History</CardTitle>
-          <div className="relative w-full sm:w-auto">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Search in notes & models..."
-              className="w-full rounded-lg bg-background pl-8 sm:w-[200px] lg:w-[250px]"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+    );
+  }
+  if (showWelcome) {
+    return <Welcome onGetStarted={handleGetStarted} />;
+  }
+  return (
+    <MainLayout>
+      <main className="flex-1 p-4 md:p-6 lg:p-8 flex flex-col gap-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Dashboard</h1>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <Select value={filterModel} onValueChange={setFilterModel}>
+              <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectValue placeholder="Filter by model" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Models</SelectItem>
+                {data.models.map(model => (
+                  <SelectItem key={model} value={model}>
+                    {model}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <DateRangePicker date={dateRange} setDate={setDateRange} />
+            <Button variant="ghost" onClick={clearFilters}>Clear</Button>
           </div>
-        </CardHeader>
-        <CardContent>
-          <PromptList
-            loading={data.loading}
-            history={filteredHistory}
-            deletePrompt={data.deletePrompt}
-            updatePromptNote={data.updatePromptNote}
-          />
-        </CardContent>
-      </Card>
-    </main>
+        </div>
+
+        <Stats history={filteredHistory} models={data.models} />
+
+        <Card>
+          <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <CardTitle>Prompt History</CardTitle>
+            <div className="relative w-full sm:w-auto">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="search"
+                placeholder="Search in notes & models..."
+                className="w-full rounded-lg bg-background pl-8 sm:w-[200px] lg:w-[250px]"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <PromptList
+              loading={data.loading}
+              history={filteredHistory}
+              deletePrompt={data.deletePrompt}
+              updatePromptNote={data.updatePromptNote}
+            />
+          </CardContent>
+        </Card>
+      </main>
+    </MainLayout>
   )
 }
