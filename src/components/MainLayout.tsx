@@ -20,31 +20,20 @@ import { Button } from '@/components/ui/button'
 import { Separator } from './ui/separator'
 
 function MainContent({ children }: { children: React.ReactNode }) {
-  const { state, isMobile } = useSidebar()
-  const isCollapsed = state === 'collapsed'
 
   return (
     <div className={cn(
-      "flex-1 flex flex-col transition-all duration-200 ease-linear",
-      !isMobile && isCollapsed && "ml-0",
-      !isMobile && !isCollapsed && "ml-4"
+      "flex-1 flex flex-col transition-all duration-200 ease-linear"
     )}>
       <header className="p-4 border-b flex items-center justify-between sticky top-0 bg-background/80 backdrop-blur-sm z-10">
         <SidebarTrigger />
       </header>
-
+      
       <div className={cn(
-        "flex-1 transition-all duration-200 ease-linear",
-        isCollapsed && "flex justify-center px-8",
-        !isCollapsed && "flex justify-start pl-8 pr-8"
+        "w-full max-w-5xl mx-auto flex-1",
+        "px-4 sm:px-6 lg:px-8"
       )}>
-        <div className={cn(
-          "w-full transition-all duration-200 ease-linear",
-          isCollapsed && "max-w-7xl",
-          !isCollapsed && "max-w-none"
-        )}>
-          {children}
-        </div>
+        {children}
       </div>
     </div>
   )
@@ -119,7 +108,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
             </div>
           </SidebarContent>
           <SidebarFooter className="p-4 text-xs text-muted-foreground">
-            Version 1.3.4
+            Version 1.3.5
           </SidebarFooter>
         </Sidebar>
         
