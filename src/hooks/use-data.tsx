@@ -144,8 +144,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         console.error('Error adding prompt:', error)
         setHistory(prev => prev.filter(p => p.id !== optimisticPrompt.id))
       } else {
+        await loadDataFromSupabase(syncKey);
         const promptsChannel = supabase.channel(`prompts-changes-for-${syncKey}`)
-        promptsChannel.send({ type: 'broadcast', event: 'prompts_changed' })
+        await promptsChannel.send({ type: 'broadcast', event: 'prompts_changed', payload: {} })
       }
     } else {
       const newPrompt: Prompt = { id: Date.now() + Math.random(), model, note, timestamp: new Date() }
@@ -162,7 +163,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         loadDataFromSupabase(syncKey) // Revert optimistic update
       } else {
         const promptsChannel = supabase.channel(`prompts-changes-for-${syncKey}`)
-        promptsChannel.send({ type: 'broadcast', event: 'prompts_changed' })
+        await promptsChannel.send({ type: 'broadcast', event: 'prompts_changed', payload: {} })
       }
     }
   }
@@ -177,7 +178,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         setHistory(originalHistory)
       } else {
         const promptsChannel = supabase.channel(`prompts-changes-for-${syncKey}`)
-        promptsChannel.send({ type: 'broadcast', event: 'prompts_changed' })
+        await promptsChannel.send({ type: 'broadcast', event: 'prompts_changed', payload: {} })
       }
     }
   }
@@ -192,7 +193,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         setHistory(originalHistory)
       } else {
         const promptsChannel = supabase.channel(`prompts-changes-for-${syncKey}`)
-        promptsChannel.send({ type: 'broadcast', event: 'prompts_changed' })
+        await promptsChannel.send({ type: 'broadcast', event: 'prompts_changed', payload: {} })
       }
     }
   }
@@ -207,7 +208,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         setModels(originalModels)
       } else {
         const modelsChannel = supabase.channel(`models-changes-for-${syncKey}`)
-        modelsChannel.send({ type: 'broadcast', event: 'models_changed' })
+        await modelsChannel.send({ type: 'broadcast', event: 'models_changed', payload: {} })
       }
     }
   }
@@ -336,9 +337,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
                     }
                 }
                 const promptsChannel = supabase.channel(`prompts-changes-for-${syncKey}`)
-                promptsChannel.send({ type: 'broadcast', event: 'prompts_changed' })
+                await promptsChannel.send({ type: 'broadcast', event: 'prompts_changed', payload: {} })
                 const modelsChannel = supabase.channel(`models-changes-for-${syncKey}`)
-                modelsChannel.send({ type: 'broadcast', event: 'models_changed' })
+                await modelsChannel.send({ type: 'broadcast', event: 'models_changed', payload: {} })
                 
                 await loadDataFromSupabase(syncKey)
                 alert('Data imported successfully!');
