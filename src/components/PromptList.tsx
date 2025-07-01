@@ -156,16 +156,16 @@ export function PromptList({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="whitespace-nowrap">Model</TableHead>
+              <TableHead className="md:whitespace-nowrap">Model</TableHead>
               <TableHead>Note</TableHead>
-              <TableHead className="whitespace-nowrap">Timestamp</TableHead>
+              <TableHead className="md:whitespace-nowrap">Timestamp</TableHead>
               <TableHead className="w-[50px] text-right"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {paginatedHistory.map(prompt => (
               <TableRow key={prompt.id}>
-                <TableCell className="font-medium whitespace-nowrap">{prompt.model}</TableCell>
+                <TableCell className="font-medium md:whitespace-nowrap">{prompt.model}</TableCell>
                 <TableCell className="text-muted-foreground max-w-[150px] sm:max-w-sm break-words">
                   {prompt.note.length > NOTE_TRUNCATE_LENGTH ? (
                     <Dialog>
@@ -192,7 +192,7 @@ export function PromptList({
                     prompt.note
                   )}
                 </TableCell>
-                <TableCell className="whitespace-nowrap">
+                <TableCell className="md:whitespace-nowrap">
                   {new Date(prompt.timestamp).toLocaleString()}
                 </TableCell>
                 <TableCell className="text-right">

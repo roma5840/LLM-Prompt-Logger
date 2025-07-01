@@ -65,6 +65,8 @@ export function Stats({ history, models }: StatsProps) {
     return models.map(model => ({ name: model, count: counts[model] })).filter(m => m.count > 0);
   }, [history, models])
   
+  const barChartHeight = modelCounts.length > 0 ? Math.max(150, modelCounts.length * 35) : 150;
+
   const dailyUsage = useMemo(() => {
     const promptCountsByDate = new Map<string, Map<string, number>>();
     history.forEach(prompt => {
@@ -124,7 +126,7 @@ export function Stats({ history, models }: StatsProps) {
         </CardHeader>
         <CardContent>
           {modelCounts.length > 0 ? (
-            <ResponsiveContainer width="100%" height={200}>
+            <ResponsiveContainer width="100%" height={barChartHeight}>
               <BarChart data={modelCounts} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                 <XAxis type="number" hide />
                 <YAxis type="category" dataKey="name" width={80} stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => truncateText(value, 10)} />
@@ -137,7 +139,7 @@ export function Stats({ history, models }: StatsProps) {
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div className="h-[200px] flex items-center justify-center text-sm text-muted-foreground">No data for this period.</div>
+            <div className="h-[150px] flex items-center justify-center text-sm text-muted-foreground">No data for this period.</div>
           )}
         </CardContent>
       </Card>
@@ -145,9 +147,9 @@ export function Stats({ history, models }: StatsProps) {
         <CardHeader>
           <CardTitle>Daily Usage</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="overflow-x-auto">
           {dailyUsage.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={300} minWidth={300}>
               <LineChart data={dailyUsage}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={12} />
