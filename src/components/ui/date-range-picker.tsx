@@ -32,7 +32,7 @@ export function DateRangePicker({
             id="date"
             variant={"outline"}
             className={cn(
-              "w-[300px] justify-start text-left font-normal",
+              "w-full justify-start text-left font-normal sm:w-[300px]",
               !date && "text-muted-foreground"
             )}
           >
@@ -58,7 +58,17 @@ export function DateRangePicker({
             defaultMonth={date?.from}
             selected={date}
             onSelect={setDate}
+            numberOfMonths={1}
+            className="sm:hidden"
+          />
+          <Calendar
+            initialFocus
+            mode="range"
+            defaultMonth={date?.from}
+            selected={date}
+            onSelect={setDate}
             numberOfMonths={2}
+            className="hidden sm:block"
           />
         </PopoverContent>
       </Popover>

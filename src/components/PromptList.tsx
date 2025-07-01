@@ -156,17 +156,17 @@ export function PromptList({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Model</TableHead>
+              <TableHead className="whitespace-nowrap">Model</TableHead>
               <TableHead>Note</TableHead>
-              <TableHead>Timestamp</TableHead>
+              <TableHead className="whitespace-nowrap">Timestamp</TableHead>
               <TableHead className="w-[50px] text-right"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {paginatedHistory.map(prompt => (
               <TableRow key={prompt.id}>
-                <TableCell className="font-medium">{prompt.model}</TableCell>
-                <TableCell className="text-muted-foreground max-w-sm break-words">
+                <TableCell className="font-medium whitespace-nowrap">{prompt.model}</TableCell>
+                <TableCell className="text-muted-foreground max-w-[150px] sm:max-w-sm break-words">
                   {prompt.note.length > NOTE_TRUNCATE_LENGTH ? (
                     <Dialog>
                       <DialogTrigger asChild>
@@ -192,7 +192,7 @@ export function PromptList({
                     prompt.note
                   )}
                 </TableCell>
-                <TableCell>
+                <TableCell className="whitespace-nowrap">
                   {new Date(prompt.timestamp).toLocaleString()}
                 </TableCell>
                 <TableCell className="text-right">
@@ -227,7 +227,7 @@ export function PromptList({
                           <Textarea
                             value={editedNote}
                             onChange={e => setEditedNote(e.target.value)}
-                            rows={5}
+                            rows={7}
                             maxLength={NOTE_MAX_LENGTH}
                           />
                           <div className={cn(

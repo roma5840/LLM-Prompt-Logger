@@ -30,6 +30,11 @@ const CustomModelTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
+const truncateText = (text: string, maxLength: number) => {
+  if (text.length <= maxLength) return text;
+  return `${text.substring(0, maxLength)}...`;
+}
+
 
 export function Stats({ history, models }: StatsProps) {
   const totalPrompts = history.length
@@ -122,7 +127,7 @@ export function Stats({ history, models }: StatsProps) {
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={modelCounts} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                 <XAxis type="number" hide />
-                <YAxis type="category" dataKey="name" width={100} stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false}/>
+                <YAxis type="category" dataKey="name" width={80} stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => truncateText(value, 10)} />
                 <Tooltip cursor={{ fill: 'hsl(var(--accent))' }} content={<CustomModelTooltip />} />
                 <Bar dataKey="count" radius={[0, 4, 4, 0]}>
                   {modelCounts.map((entry) => (

@@ -49,8 +49,8 @@ export default function Home() {
   return (
     <main className="flex-1 p-4 md:p-6 lg:p-8 flex flex-col gap-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-        <div className="flex items-center gap-2 flex-wrap">
+        <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Dashboard</h1>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
           <Select value={filterModel} onValueChange={setFilterModel}>
             <SelectTrigger className="w-full sm:w-[180px]">
               <SelectValue placeholder="Filter by model" />
