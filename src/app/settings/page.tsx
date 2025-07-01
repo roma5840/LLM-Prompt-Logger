@@ -45,6 +45,28 @@ export default function SettingsPage() {
 
   const isModelLimitReached = data.models.length >= MODEL_LIMIT;
 
+  const formatBytes = (bytes: number, decimals = 2) => {
+    if (!+bytes) return '0 Bytes'
+    const k = 1024
+    const dm = decimals < 0 ? 0 : decimals
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`
+  }
+
+  const estimatedStorage = useMemo(() => {
+    if (!data.syncKey || !data.history) return 0;
+    const totalBytes = data.history.reduce((acc, prompt) => {
+        const modelBytes = new TextEncoder().encode(prompt.model).length;
+        const noteBytes = new TextEncoder().encode(prompt.note).length;
+        const overheadBytes = 56; // Estimated overhead per row in Supabase
+        return acc + modelBytes + noteBytes + overheadBytes;
+    }, 0);
+    return totalBytes;
+  }, [data.history, data.syncKey]);
+  
+  const formattedSize = formatBytes(estimatedStorage);
+
   const handleAddModel = () => {
     if (newModel && !data.models.includes(newModel) && !isModelLimitReached) {
       data.updateUserModels([...data.models, newModel])
@@ -214,51 +236,60 @@ export default function SettingsPage() {
               <CardTitle>Sync & Data Management</CardTitle>
               <CardDescription>Enable cloud sync or manage your local data.</CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
-              {data.syncKey ? (
-                <Dialog>
-                  <DialogTrigger asChild><Button className="w-full">Link Another Device</Button></DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader><DialogTitle>Scan QR Code</DialogTitle></DialogHeader>
-                    <div className="flex justify-center my-4"><canvas id="qr-code-canvas" ref={canvas => canvas && generateQrCode(data.syncKey!, canvas)}></canvas></div>
-                    <Input value={data.syncKey} readOnly />
-                  </DialogContent>
-                </Dialog>
-              ) : (
-                <div className="space-y-2">
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild><Button className="w-full" disabled={data.syncing}>{data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Enable Cloud Sync</Button></AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Enable Cloud Sync?</AlertDialogTitle>
-                        <AlertDialogDescription>This will upload your local data to a new, secure cloud account, allowing you to sync across devices. Are you sure?</AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleMigrateToCloud} disabled={data.syncing}>{data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Enable Sync</AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                  <Dialog open={isLinkDeviceDialogOpen} onOpenChange={setLinkDeviceDialogOpen}>
-                    <DialogTrigger asChild><Button variant="outline" className="w-full">Link This Device</Button></DialogTrigger>
+            <CardContent className="flex flex-col gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                {data.syncKey ? (
+                  <Dialog>
+                    <DialogTrigger asChild><Button className="w-full">Link Another Device</Button></DialogTrigger>
                     <DialogContent>
-                      <DialogHeader><DialogTitle>Scan or Enter Sync Key</DialogTitle></DialogHeader>
-                      <div id="qr-reader" className="my-2"></div>
-                      <Input placeholder="Enter sync key manually" value={manualSyncKey} onChange={e => setManualSyncKey(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLinkDevice(manualSyncKey)} disabled={data.syncing} />
-                      <DialogFooter className="gap-y-2 sm:gap-x-2 flex-col sm:flex-row">
-                        <Button variant="secondary" onClick={() => startQrScanner(key => handleLinkDevice(key))} disabled={data.syncing}>Start Scanner</Button>
-                        <Button onClick={() => handleLinkDevice(manualSyncKey)} disabled={data.syncing || !manualSyncKey}>{data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Link</Button>
-                      </DialogFooter>
+                      <DialogHeader><DialogTitle>Scan QR Code</DialogTitle></DialogHeader>
+                      <div className="flex justify-center my-4"><canvas id="qr-code-canvas" ref={canvas => canvas && generateQrCode(data.syncKey!, canvas)}></canvas></div>
+                      <Input value={data.syncKey} readOnly />
                     </DialogContent>
                   </Dialog>
-                </div>
-              )}
-              <div className="space-y-2">
-                <Button onClick={data.handleExportData} variant="outline" className="w-full">Export Data</Button>
-                <div className="flex w-full items-center space-x-2">
-                  <Input id="import-file-input" type="file" accept=".json" onChange={e => setFileToImport(e.target.files ? e.target.files[0] : null)} className="w-full" />
+                ) : (
+                  <div className="space-y-2">
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild><Button className="w-full" disabled={data.syncing}>{data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Enable Cloud Sync</Button></AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Enable Cloud Sync?</AlertDialogTitle>
+                          <AlertDialogDescription>This will upload your local data to a new, secure cloud account, allowing you to sync across devices. Are you sure?</AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={handleMigrateToCloud} disabled={data.syncing}>{data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Enable Sync</AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                    <Dialog open={isLinkDeviceDialogOpen} onOpenChange={setLinkDeviceDialogOpen}>
+                      <DialogTrigger asChild><Button variant="outline" className="w-full">Link This Device</Button></DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader><DialogTitle>Scan or Enter Sync Key</DialogTitle></DialogHeader>
+                        <div id="qr-reader" className="my-2"></div>
+                        <Input placeholder="Enter sync key manually" value={manualSyncKey} onChange={e => setManualSyncKey(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLinkDevice(manualSyncKey)} disabled={data.syncing} />
+                        <DialogFooter className="gap-y-2 sm:gap-x-2 flex-col sm:flex-row">
+                          <Button variant="secondary" onClick={() => startQrScanner(key => handleLinkDevice(key))} disabled={data.syncing}>Start Scanner</Button>
+                          <Button onClick={() => handleLinkDevice(manualSyncKey)} disabled={data.syncing || !manualSyncKey}>{data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Link</Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Button onClick={data.handleExportData} variant="outline" className="w-full">Export Data</Button>
+                  <div className="flex w-full items-center space-x-2">
+                    <Input id="import-file-input" type="file" accept=".json" onChange={e => setFileToImport(e.target.files ? e.target.files[0] : null)} className="w-full" />
+                  </div>
                 </div>
               </div>
+
+              {data.syncKey && data.history.length > 0 && (
+                <div className="text-xs text-center text-muted-foreground p-2 border rounded-md bg-muted/50">
+                  <p>Estimated Cloud Storage: <span className="font-semibold">{formattedSize}</span></p>
+                  <p className="mt-1">Based on {data.history.length} synced prompts.</p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
