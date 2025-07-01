@@ -2,19 +2,58 @@
 'use client'
 
 import React from 'react'
-import { SidebarProvider, Sidebar, SidebarTrigger, SidebarContent, SidebarInset, SidebarHeader, SidebarFooter, SidebarSeparator } from '@/components/ui/sidebar'
+import { SidebarProvider, Sidebar, SidebarTrigger, SidebarContent, SidebarHeader, SidebarFooter, useSidebar } from '@/components/ui/sidebar'
 import { PromptLogger } from '@/components/PromptLogger'
 import { ModelManager } from '@/components/ModelManager'
 import { useData } from '@/hooks/use-data'
 import { Toaster } from '@/components/ui/toaster'
 import { BotMessageSquare } from 'lucide-react'
+import { cn } from '@/lib/utils'
+
+function MainContent({ children }: { children: React.ReactNode }) {
+  const { state, isMobile } = useSidebar()
+  const isCollapsed = state === 'collapsed'
+
+  return (
+    <div className={cn(
+      "flex-1 flex flex-col transition-all duration-200 ease-linear",
+      // On desktop, when sidebar is collapsed, we want full width centering
+      !isMobile && isCollapsed && "ml-0",
+      // On desktop, when sidebar is expanded, we add margin to account for sidebar
+      !isMobile && !isCollapsed && "ml-4"
+    )}>
+      <header className="p-4 border-b flex items-center justify-between sticky top-0 bg-background/80 backdrop-blur-sm z-10">
+        <SidebarTrigger />
+      </header>
+      
+      {/* This is the key container that handles centering vs left-alignment */}
+      <div className={cn(
+        "flex-1 transition-all duration-200 ease-linear",
+        // When collapsed: center the content with max width and padding
+        isCollapsed && "flex justify-center px-8",
+        // When expanded: align to left with margin from sidebar
+        !isCollapsed && "flex justify-start pl-8 pr-8"
+      )}>
+        <div className={cn(
+          "w-full transition-all duration-200 ease-linear",
+          // Constrain width when centered
+          isCollapsed && "max-w-7xl",
+          // Full width when sidebar is open
+          !isCollapsed && "max-w-none"
+        )}>
+          {children}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export function MainLayout({ children }: { children: React.ReactNode }) {
   const data = useData()
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen">
+      <div className="flex min-h-screen w-full">
         <Sidebar>
           <SidebarHeader className="p-4">
             <div className="flex items-center gap-2">
@@ -40,15 +79,10 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
             Version 1.0.0
           </SidebarFooter>
         </Sidebar>
-        <div className="flex-1 flex flex-col">
-          <header className="p-4 border-b flex items-center justify-between sticky top-0 bg-background/80 backdrop-blur-sm z-10">
-            <SidebarTrigger />
-            {/* Future header content can go here, e.g., user menu */}
-          </header>
-          <SidebarInset>
-            {children}
-          </SidebarInset>
-        </div>
+        
+        <MainContent>
+          {children}
+        </MainContent>
       </div>
       <Toaster />
     </SidebarProvider>
