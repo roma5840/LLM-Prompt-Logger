@@ -39,6 +39,7 @@ export default function RootLayout({
             </MainLayout>
           </DataProvider>
         </ThemeProvider>
+        <Analytics />
       </body>
     </html>
   )
