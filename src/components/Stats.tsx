@@ -17,6 +17,20 @@ const getStartOfToday = () => {
 
 const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
 
+const CustomModelTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="rounded-lg border bg-popover px-3 py-1.5 text-sm shadow-sm">
+        <p className="text-popover-foreground">
+          {label}: <span className="font-bold text-muted-foreground">{payload[0].value}</span>
+        </p>
+      </div>
+    );
+  }
+  return null;
+};
+
+
 export function Stats({ history, models }: StatsProps) {
   const totalPrompts = history.length
   const dailyPrompts = history.filter(p => new Date(p.timestamp) >= getStartOfToday()).length
@@ -109,7 +123,7 @@ export function Stats({ history, models }: StatsProps) {
               <BarChart data={modelCounts} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                 <XAxis type="number" hide />
                 <YAxis type="category" dataKey="name" width={100} stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false}/>
-                <Tooltip cursor={{ fill: 'hsl(var(--accent))' }} contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} />
+                <Tooltip cursor={{ fill: 'hsl(var(--accent))' }} content={<CustomModelTooltip />} />
                 <Bar dataKey="count" radius={[0, 4, 4, 0]}>
                   {modelCounts.map((entry) => (
                     <Cell key={`cell-${entry.name}`} fill={modelColorMap.get(entry.name) || '#8884d8'} />
