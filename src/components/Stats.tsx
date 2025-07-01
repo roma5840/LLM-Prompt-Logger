@@ -35,6 +35,20 @@ const truncateText = (text: string, maxLength: number) => {
   return `${text.substring(0, maxLength)}...`;
 }
 
+const CustomLegend = (props: any) => {
+  const { payload } = props;
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 mt-4 text-xs text-muted-foreground">
+      {payload.map((entry: any, index: number) => (
+        <div key={`item-${index}`} className="flex items-center space-x-2">
+          <span style={{ backgroundColor: entry.color }} className="inline-block w-2.5 h-2.5 rounded-full" />
+          <span>{entry.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 
 export function Stats({ history, models }: StatsProps) {
   const totalPrompts = history.length
@@ -147,15 +161,15 @@ export function Stats({ history, models }: StatsProps) {
         <CardHeader>
           <CardTitle>Daily Usage</CardTitle>
         </CardHeader>
-        <CardContent className="overflow-x-auto">
+        <CardContent>
           {dailyUsage.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300} minWidth={300}>
+            <ResponsiveContainer width="100%" height={300}>
               <LineChart data={dailyUsage}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={12} />
                 <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} allowDecimals={false} />
                 <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} />
-                <Legend />
+                <Legend content={<CustomLegend />} />
                 {Array.from(activeModelsInPeriod).map((model) => (
                   <Line key={model} type="monotone" dataKey={model} stroke={modelColorMap.get(model)} dot={false} strokeWidth={2} />
                 ))}
