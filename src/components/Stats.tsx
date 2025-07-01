@@ -49,7 +49,7 @@ export function Stats({ history, models }: StatsProps) {
   const dailyUsage = useMemo(() => {
     const promptCountsByDate = new Map<string, Map<string, number>>();
     history.forEach(prompt => {
-      const dateKey = prompt.timestamp.toISOString().split('T')[0]; 
+      const dateKey = new Date(prompt.timestamp).toLocaleDateString('en-CA'); 
       if (!promptCountsByDate.has(dateKey)) {
         promptCountsByDate.set(dateKey, new Map());
       }
@@ -67,7 +67,7 @@ export function Stats({ history, models }: StatsProps) {
     }
     
     return last14Days.map(date => {
-      const dateKey = date.toISOString().split('T')[0];
+      const dateKey = date.toLocaleDateString('en-CA');
       const displayDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       
       const chartDataPoint: { date: string, [model: string]: number | string } = { date: displayDate };
@@ -79,7 +79,7 @@ export function Stats({ history, models }: StatsProps) {
 
       return chartDataPoint;
     });
-  }, [history, activeModelsInPeriod]);
+  }, [history]);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
