@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback, createContext, useContext, ReactNode 
 import { supabase } from '@/lib/supabase'
 import { DEFAULT_MODELS, LOCAL_HISTORY_STORAGE, LOCAL_MODELS_STORAGE, SYNC_KEY_STORAGE } from '@/lib/constants'
 import { Prompt, Model } from '@/lib/types'
+import { useToast } from './use-toast'
 
 interface DataContextType {
   history: Prompt[];
@@ -43,6 +44,26 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [syncKey, setSyncKey] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
+  const { toast } = useToast();
+
+  const unlinkDevice = useCallback((options?: { showToast?: boolean; title?: string; message?: string }) => {
+    localStorage.removeItem(SYNC_KEY_STORAGE);
+    localStorage.removeItem(LOCAL_HISTORY_STORAGE);
+    localStorage.removeItem(LOCAL_MODELS_STORAGE);
+    
+    setSyncKey(null);
+    setHistory([]);
+    setModels(DEFAULT_MODELS);
+
+    if (options?.showToast) {
+        toast({
+            title: options.title || "Device Unlinked",
+            description: options.message || "Cloud sync has been disabled on this device.",
+            variant: "destructive",
+            duration: 10000,
+        });
+    }
+  }, [toast]);
 
   const loadDataFromLocalStorage = useCallback(() => {
     const localHistory = localStorage.getItem(LOCAL_HISTORY_STORAGE)
@@ -67,10 +88,22 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   const refreshDataFromSupabase = useCallback(async (key: string) => {
     const { data: bucketData, error: bucketError } = await supabase.rpc('get_my_bucket_data', { p_bucket_id: key });
-    if (bucketError || !bucketData || bucketData.length === 0) {
-      console.error('Error refreshing models:', bucketError);
+
+    if (bucketError) {
+      console.error('Error refreshing data from cloud:', bucketError);
       return;
     }
+
+    if (!bucketData || bucketData.length === 0) {
+      console.warn('Sync key/account not found in the cloud. The account may have been deleted. Unlinking device.');
+      unlinkDevice({ 
+        showToast: true, 
+        title: "Account Not Found",
+        message: "Your cloud account has been unlinked because it could not be found. It may have been deleted from another device." 
+      });
+      return;
+    }
+    
     setModels(bucketData[0].models || [...DEFAULT_MODELS]);
 
     const { data: promptsData, error: promptsError } = await supabase.rpc('get_my_prompts', { p_bucket_id: key });
@@ -79,7 +112,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     } else {
       setHistory(promptsData.map((p: any) => ({ ...p, timestamp: new Date(p.timestamp) })));
     }
-  }, []);
+  }, [unlinkDevice]);
 
   const loadDataFromSupabase = useCallback(async (key: string) => {
     setLoading(true)
@@ -121,24 +154,36 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   }, [history, models, syncKey, saveDataToLocalStorage])
 
   useEffect(() => {
-    if (!syncKey) return
+    if (!syncKey) return;
 
-    const promptsChannel = supabase
-      .channel(`prompts-changes-for-${syncKey}`)
+    const channel = supabase.channel(`data-sync-${syncKey}`);
+
+    channel
       .on('broadcast', { event: 'prompts_changed' }, () => refreshDataFromSupabase(syncKey))
-      .subscribe()
-      
-    const modelsChannel = supabase
-      .channel(`models-changes-for-${syncKey}`)
       .on('broadcast', { event: 'models_changed' }, () => refreshDataFromSupabase(syncKey))
-      .subscribe()
+      .on('broadcast', { event: 'account_deleted' }, () => {
+        unlinkDevice({
+          showToast: true,
+          title: "Account Deleted",
+          message: "This cloud account was deleted from another device. This device has been unlinked.",
+        });
+      })
+      .subscribe();
 
     return () => {
-      supabase.removeChannel(promptsChannel)
-      supabase.removeChannel(modelsChannel)
-    }
-  }, [syncKey, refreshDataFromSupabase])
+      supabase.removeChannel(channel);
+    };
+  }, [syncKey, refreshDataFromSupabase, unlinkDevice]);
 
+  const broadcastChange = async (event: string) => {
+    if (!syncKey) return;
+    try {
+      const channel = supabase.channel(`data-sync-${syncKey}`);
+      await channel.send({ type: 'broadcast', event });
+    } catch (error) {
+      console.error(`Failed to broadcast event '${event}':`, error);
+    }
+  };
 
   const addPrompt = async (model: string, note: string, outputTokens: number | null) => {
     if (syncKey) {
@@ -150,9 +195,8 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         setHistory(prev => prev.filter(p => p.id !== optimisticPrompt.id))
         throw new Error("Failed to log prompt. The server might be unreachable.");
       } else {
-        await refreshDataFromSupabase(syncKey); // Use refresh to avoid loading state
-        const promptsChannel = supabase.channel(`prompts-changes-for-${syncKey}`)
-        await promptsChannel.send({ type: 'broadcast', event: 'prompts_changed', payload: {} })
+        await refreshDataFromSupabase(syncKey);
+        await broadcastChange('prompts_changed');
       }
     } else {
       const newPrompt: Prompt = { id: Date.now() + Math.random(), model, note, output_tokens: outputTokens, timestamp: new Date() }
@@ -166,10 +210,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       const { error } = await supabase.rpc('update_my_prompt_note', { p_prompt_id: promptId, p_bucket_id: syncKey, p_new_note: newNote })
       if (error) {
         console.error('Error updating note:', error)
-        refreshDataFromSupabase(syncKey) // Revert optimistic update
+        refreshDataFromSupabase(syncKey)
       } else {
-        const promptsChannel = supabase.channel(`prompts-changes-for-${syncKey}`)
-        await promptsChannel.send({ type: 'broadcast', event: 'prompts_changed', payload: {} })
+        await broadcastChange('prompts_changed');
       }
     }
   }
@@ -183,8 +226,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         console.error('Error deleting prompt:', error)
         setHistory(originalHistory)
       } else {
-        const promptsChannel = supabase.channel(`prompts-changes-for-${syncKey}`)
-        await promptsChannel.send({ type: 'broadcast', event: 'prompts_changed', payload: {} })
+        await broadcastChange('prompts_changed');
       }
     }
   }
@@ -198,8 +240,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         console.error('Error deleting all prompts:', error)
         setHistory(originalHistory)
       } else {
-        const promptsChannel = supabase.channel(`prompts-changes-for-${syncKey}`)
-        await promptsChannel.send({ type: 'broadcast', event: 'prompts_changed', payload: {} })
+        await broadcastChange('prompts_changed');
       }
     }
   }
@@ -213,8 +254,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         console.error('Error updating models:', error)
         setModels(originalModels)
       } else {
-        const modelsChannel = supabase.channel(`models-changes-for-${syncKey}`)
-        await modelsChannel.send({ type: 'broadcast', event: 'models_changed', payload: {} })
+        await broadcastChange('models_changed');
       }
     }
   }
@@ -275,17 +315,11 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     }
   }
 
-  const unlinkDevice = useCallback(() => {
-    localStorage.removeItem(SYNC_KEY_STORAGE);
-    setSyncKey(null);
-    setHistory([]);
-    setModels(DEFAULT_MODELS);
-  }, []);
-
   const deleteAccount = async () => {
     if (!syncKey) return;
     setSyncing(true)
     try {
+      await broadcastChange('account_deleted');
       const { error } = await supabase.rpc('delete_my_account', { p_bucket_id: syncKey })
       if (error) {
         console.error('Error deleting account:', error);
@@ -362,10 +396,8 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
                     });
                 }
             }
-            const promptsChannel = supabase.channel(`prompts-changes-for-${syncKey}`)
-            await promptsChannel.send({ type: 'broadcast', event: 'prompts_changed', payload: {} })
-            const modelsChannel = supabase.channel(`models-changes-for-${syncKey}`)
-            await modelsChannel.send({ type: 'broadcast', event: 'models_changed', payload: {} })
+            await broadcastChange('prompts_changed');
+            await broadcastChange('models_changed');
             
             await refreshDataFromSupabase(syncKey)
 
