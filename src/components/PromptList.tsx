@@ -1,7 +1,7 @@
 // src/components/PromptList.tsx
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Prompt } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import {
@@ -28,15 +28,16 @@ import {
   DialogClose
 } from '@/components/ui/dialog'
 import { Textarea } from './ui/textarea'
-import { MoreHorizontal } from 'lucide-react'
+import { MoreHorizontal, ChevronsUpDown, Trash2 } from 'lucide-react'
 import { Skeleton } from './ui/skeleton'
 import { cn } from '@/lib/utils'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible'
 
 interface PromptListProps {
   loading: boolean
   history: Prompt[]
   deletePrompt: (id: number) => void
-  updatePromptNote: (id: number, note: string) => void
+  updatePrompt: (id: number, note: string, outputTokens: number | null) => void
 }
 
 const ITEMS_PER_PAGE = 10
@@ -99,11 +100,16 @@ export function PromptList({
   loading,
   history,
   deletePrompt,
-  updatePromptNote,
+  updatePrompt,
 }: PromptListProps) {
   const [currentPage, setCurrentPage] = useState(1)
   const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null)
+  
+  // State for the edit dialog
   const [editedNote, setEditedNote] = useState('')
+  const [editedTokens, setEditedTokens] = useState<number | null>(null)
+  const [isOutputOpen, setIsOutputOpen] = useState(false)
+  const [outputText, setOutputText] = useState('')
 
   const paginatedHistory = history.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
@@ -118,14 +124,29 @@ export function PromptList({
     pageSize: ITEMS_PER_PAGE,
   });
 
+  const calculatedTokens = useMemo(() => {
+    if (!outputText) return 0;
+    // A common heuristic for token count is 1 token ~ 4 characters.
+    return Math.ceil(outputText.length / 4);
+  }, [outputText]);
+
+  useEffect(() => {
+    if (isOutputOpen) {
+      setEditedTokens(calculatedTokens > 0 ? calculatedTokens : null);
+    }
+  }, [calculatedTokens, isOutputOpen]);
+
   const handleEdit = (prompt: Prompt) => {
     setEditingPrompt(prompt)
     setEditedNote(prompt.note)
+    setEditedTokens(prompt.output_tokens)
+    setOutputText('')
+    setIsOutputOpen(false)
   }
 
   const handleSaveEdit = () => {
     if (editingPrompt) {
-      updatePromptNote(editingPrompt.id, editedNote)
+      updatePrompt(editingPrompt.id, editedNote, editedTokens)
       setEditingPrompt(null)
     }
   }
@@ -168,7 +189,7 @@ export function PromptList({
               <TableRow key={prompt.id}>
                 <TableCell className="font-medium md:whitespace-nowrap">{prompt.model}</TableCell>
                 <TableCell className="text-muted-foreground max-w-[150px] sm:max-w-sm break-words">
-                  {prompt.note.length > NOTE_TRUNCATE_LENGTH ? (
+                  {prompt.note && prompt.note.length > NOTE_TRUNCATE_LENGTH ? (
                     <Dialog>
                       <DialogTrigger asChild>
                         <span className="cursor-pointer hover:underline">
@@ -225,21 +246,53 @@ export function PromptList({
                     {editingPrompt && editingPrompt.id === prompt.id && (
                        <DialogContent>
                         <DialogHeader>
-                          <DialogTitle>Edit Prompt Note</DialogTitle>
+                          <DialogTitle>Edit Prompt</DialogTitle>
                         </DialogHeader>
-                        <div className="my-4">
-                          <Textarea
-                            value={editedNote}
-                            onChange={e => setEditedNote(e.target.value)}
-                            rows={7}
-                            maxLength={NOTE_MAX_LENGTH}
-                          />
-                          <div className={cn(
-                              "text-right text-xs mt-1",
-                              editedNote.length >= NOTE_MAX_LENGTH ? "text-red-500" : "text-muted-foreground"
-                          )}>
-                            {editedNote.length} / {NOTE_MAX_LENGTH}
+                        <div className="my-4 grid gap-4">
+                          <div className="grid gap-2">
+                            <Textarea
+                              value={editedNote}
+                              onChange={e => setEditedNote(e.target.value)}
+                              rows={7}
+                              maxLength={NOTE_MAX_LENGTH}
+                              placeholder="Enter prompt notes or tags..."
+                            />
+                            <div className={cn(
+                                "text-right text-xs mt-1",
+                                editedNote.length >= NOTE_MAX_LENGTH ? "text-red-500" : "text-muted-foreground"
+                            )}>
+                              {editedNote.length} / {NOTE_MAX_LENGTH}
+                            </div>
                           </div>
+                          <Collapsible open={isOutputOpen} onOpenChange={setIsOutputOpen} className="grid gap-2">
+                            <div className="flex items-center justify-between -mb-2">
+                                <CollapsibleTrigger asChild>
+                                    <Button variant="ghost" size="sm" className="text-sm px-2 -ml-2">
+                                        <ChevronsUpDown className="h-4 w-4 mr-2" />
+                                        Edit LLM Output Tokens
+                                    </Button>
+                                </CollapsibleTrigger>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-mono text-muted-foreground">
+                                      {editedTokens?.toLocaleString() ?? 'N/A'}
+                                  </span>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditedTokens(null)}>
+                                    <Trash2 className="h-4 w-4 text-destructive/70" />
+                                  </Button>
+                                </div>
+                            </div>
+                            <CollapsibleContent className="space-y-2 pt-2">
+                                <Textarea 
+                                    placeholder="Paste new model output here to recalculate tokens..."
+                                    value={outputText}
+                                    onChange={(e) => setOutputText(e.target.value)}
+                                    rows={5}
+                                />
+                                <p className="text-xs text-muted-foreground text-center">
+                                  Recalculated tokens: ~{calculatedTokens.toLocaleString()}
+                                </p>
+                            </CollapsibleContent>
+                          </Collapsible>
                         </div>
                         <DialogFooter>
                           <DialogClose asChild>

@@ -14,7 +14,7 @@ interface DataContextType {
   loading: boolean;
   syncing: boolean;
   addPrompt: (model: string, note: string, outputTokens: number | null) => Promise<void>;
-  updatePromptNote: (id: number, note: string) => Promise<void>;
+  updatePrompt: (id: number, note: string, outputTokens: number | null) => Promise<void>;
   deletePrompt: (id: number) => Promise<void>;
   deleteAllPrompts: () => Promise<void>;
   deleteAccount: () => Promise<void>;
@@ -153,6 +153,16 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [history, models, syncKey, saveDataToLocalStorage])
 
+  const broadcastChange = async (event: string) => {
+    if (!syncKey) return;
+    try {
+      const channel = supabase.channel(`data-sync-${syncKey}`);
+      await channel.send({ type: 'broadcast', event });
+    } catch (error) {
+      console.error(`Failed to broadcast event '${event}':`, error);
+    }
+  };
+
   useEffect(() => {
     if (!syncKey) return;
 
@@ -175,16 +185,6 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [syncKey, refreshDataFromSupabase, unlinkDevice]);
 
-  const broadcastChange = async (event: string) => {
-    if (!syncKey) return;
-    try {
-      const channel = supabase.channel(`data-sync-${syncKey}`);
-      await channel.send({ type: 'broadcast', event });
-    } catch (error) {
-      console.error(`Failed to broadcast event '${event}':`, error);
-    }
-  };
-
   const addPrompt = async (model: string, note: string, outputTokens: number | null) => {
     if (syncKey) {
       const optimisticPrompt: Prompt = { id: Date.now(), bucket_id: syncKey, model, note, output_tokens: outputTokens, timestamp: new Date() }
@@ -204,13 +204,18 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     }
   }
 
-  const updatePromptNote = async (promptId: number, newNote: string) => {
-    setHistory(prev => prev.map(p => p.id === promptId ? { ...p, note: newNote } : p))
+  const updatePrompt = async (promptId: number, newNote: string, newOutputTokens: number | null) => {
+    setHistory(prev => prev.map(p => p.id === promptId ? { ...p, note: newNote, output_tokens: newOutputTokens } : p))
     if (syncKey) {
-      const { error } = await supabase.rpc('update_my_prompt_note', { p_prompt_id: promptId, p_bucket_id: syncKey, p_new_note: newNote })
+      const { error } = await supabase.rpc('update_my_prompt', { 
+        p_prompt_id: promptId, 
+        p_bucket_id: syncKey, 
+        p_new_note: newNote,
+        p_new_output_tokens: newOutputTokens
+      })
       if (error) {
-        console.error('Error updating note:', error)
-        refreshDataFromSupabase(syncKey)
+        console.error('Error updating prompt:', error)
+        refreshDataFromSupabase(syncKey) // Revert optimistic update
       } else {
         await broadcastChange('prompts_changed');
       }
@@ -424,7 +429,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     loading,
     syncing,
     addPrompt,
-    updatePromptNote,
+    updatePrompt,
     deletePrompt,
     deleteAllPrompts,
     deleteAccount,

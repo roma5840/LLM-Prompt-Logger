@@ -77,7 +77,7 @@ export default function Home() {
         if (!query) return true;
         return (
           p.model.toLowerCase().includes(query) ||
-          p.note.toLowerCase().includes(query)
+          (p.note && p.note.toLowerCase().includes(query))
         );
       })
   }, [data.history, filterModel, dateRange, searchQuery])
@@ -149,7 +149,7 @@ export default function Home() {
               loading={data.loading}
               history={filteredHistory}
               deletePrompt={data.deletePrompt}
-              updatePromptNote={data.updatePromptNote}
+              updatePrompt={data.updatePrompt}
             />
           </CardContent>
         </Card>

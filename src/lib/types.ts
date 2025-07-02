@@ -3,6 +3,7 @@ export interface Prompt {
   bucket_id?: string;
   model: string;
   note: string;
+  output_tokens: number | null;
   timestamp: Date;
 }
 
