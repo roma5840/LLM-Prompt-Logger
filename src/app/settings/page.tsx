@@ -300,12 +300,20 @@ export default function SettingsPage() {
                       <AlertDialogContent>
                         <AlertDialogHeader>
                           <AlertDialogTitle>Enable Cloud Sync?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This will upload your local data to a new, secure cloud account, allowing you to sync across devices.
-                            <span className="font-semibold text-foreground block mt-2">Please note: To maintain service performance, prompts older than 90 days are automatically deleted from the cloud.</span>
-                          </AlertDialogDescription>
                         </AlertDialogHeader>
-                        <AlertDialogFooter>
+                        <div className="space-y-4">
+                          <Alert>
+                            <AlertTriangle className="h-4 w-4" />
+                            <AlertTitle>Data Retention Policy</AlertTitle>
+                            <AlertDescription>
+                              To maintain service performance, prompts older than 90 days are automatically deleted from the cloud.
+                            </AlertDescription>
+                          </Alert>
+                          <AlertDialogDescription>
+                            This will upload your local data to a new, secure cloud account, allowing you to sync across devices. Are you sure you want to continue?
+                          </AlertDialogDescription>
+                        </div>
+                        <AlertDialogFooter className="pt-2">
                           <AlertDialogCancel>Cancel</AlertDialogCancel>
                           <AlertDialogAction onClick={handleMigrateToCloud} disabled={data.syncing}>{data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Enable Sync</AlertDialogAction>
                         </AlertDialogFooter>
@@ -407,7 +415,7 @@ export default function SettingsPage() {
           </Card>
         </div>
       </main>
-      <AlertDialog open={!!fileToImport} onOpenChange={(open) => { if (!open) setFileToImport(null) }}>
+      <AlertDialog open={!!fileToImport} onOpenChange={(open) => { if (!open) setFileToImport(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Overwrite Data?</AlertDialogTitle>
