@@ -26,9 +26,10 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import QRCode from 'qrcode'
 import { Html5Qrcode } from 'html5-qrcode'
-import { Loader2 } from 'lucide-react'
+import { Loader2, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const MODEL_NAME_MAX_LENGTH = 80;
@@ -299,7 +300,10 @@ export default function SettingsPage() {
                       <AlertDialogContent>
                         <AlertDialogHeader>
                           <AlertDialogTitle>Enable Cloud Sync?</AlertDialogTitle>
-                          <AlertDialogDescription>This will upload your local data to a new, secure cloud account, allowing you to sync across devices. Are you sure?</AlertDialogDescription>
+                          <AlertDialogDescription>
+                            This will upload your local data to a new, secure cloud account, allowing you to sync across devices.
+                            <span className="font-semibold text-foreground block mt-2">Please note: To maintain service performance, prompts older than 90 days are automatically deleted from the cloud.</span>
+                          </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -311,9 +315,18 @@ export default function SettingsPage() {
                       <DialogTrigger asChild><Button variant="outline" className="w-full">Link This Device</Button></DialogTrigger>
                       <DialogContent>
                         <DialogHeader><DialogTitle>Scan or Enter Sync Key</DialogTitle></DialogHeader>
-                        <div id="qr-reader" className="my-2"></div>
-                        <Input placeholder="Enter sync key manually" value={manualSyncKey} onChange={e => setManualSyncKey(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLinkDevice(manualSyncKey)} disabled={data.syncing} />
-                        <DialogFooter className="gap-y-2 sm:gap-x-2 flex-col sm:flex-row">
+                        <div className="space-y-4">
+                          <Alert>
+                            <AlertTriangle className="h-4 w-4" />
+                            <AlertTitle>Data Retention Policy</AlertTitle>
+                            <AlertDescription>
+                              By linking your device, you acknowledge that any synced prompts older than 90 days will be automatically deleted to maintain service performance.
+                            </AlertDescription>
+                          </Alert>
+                          <div id="qr-reader" className="my-2"></div>
+                          <Input placeholder="Enter sync key manually" value={manualSyncKey} onChange={e => setManualSyncKey(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLinkDevice(manualSyncKey)} disabled={data.syncing} />
+                        </div>
+                        <DialogFooter className="gap-y-2 sm:gap-x-2 flex-col sm:flex-row pt-4">
                           <Button variant="secondary" onClick={() => startQrScanner(key => handleLinkDevice(key))} disabled={data.syncing}>Start Scanner</Button>
                           <Button onClick={() => handleLinkDevice(manualSyncKey)} disabled={data.syncing || !manualSyncKey}>{data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Link</Button>
                         </DialogFooter>
