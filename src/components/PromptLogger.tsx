@@ -1,7 +1,7 @@
 // src/components/PromptLogger.tsx
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -14,10 +14,11 @@ import { Textarea } from '@/components/ui/textarea'
 import { Model } from '@/lib/types'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
-import { Loader2 } from 'lucide-react'
+import { Loader2, ChevronsUpDown } from 'lucide-react'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible'
 
 interface PromptLoggerProps {
-  addPrompt: (model: string, note: string) => Promise<void>
+  addPrompt: (model: string, note: string, outputTokens: number | null) => Promise<void>
   models: Model[]
   onPromptLogged?: () => void
   isSubmitting: boolean
@@ -29,7 +30,15 @@ const NOTE_MAX_LENGTH = 1500;
 export function PromptLogger({ addPrompt, models, onPromptLogged, isSubmitting, setIsSubmitting }: PromptLoggerProps) {
   const [selectedModel, setSelectedModel] = useState('')
   const [note, setNote] = useState('')
+  const [outputText, setOutputText] = useState('')
+  const [isOutputOpen, setIsOutputOpen] = useState(false)
   const { toast } = useToast()
+  
+  const outputTokens = useMemo(() => {
+    if (!outputText) return 0;
+    // A common heuristic for token count is 1 token ~ 4 characters.
+    return Math.ceil(outputText.length / 4);
+  }, [outputText]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -44,8 +53,9 @@ export function PromptLogger({ addPrompt, models, onPromptLogged, isSubmitting, 
 
     setIsSubmitting(true)
     try {
-      await addPrompt(selectedModel, note)
+      await addPrompt(selectedModel, note, outputTokens > 0 ? outputTokens : null)
       setNote('')
+      setOutputText('')
       onPromptLogged?.()
     } catch (error: any) {
       toast({
@@ -90,6 +100,30 @@ export function PromptLogger({ addPrompt, models, onPromptLogged, isSubmitting, 
           {note.length} / {NOTE_MAX_LENGTH}
         </div>
       </div>
+      <Collapsible open={isOutputOpen} onOpenChange={setIsOutputOpen} className="grid gap-2">
+        <div className="flex items-center justify-between -mb-2">
+            <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm" className="text-sm px-2 -ml-2">
+                    <ChevronsUpDown className="h-4 w-4 mr-2" />
+                    Add LLM Output (Optional)
+                </Button>
+            </CollapsibleTrigger>
+            {isOutputOpen && (
+              <span className="text-xs text-muted-foreground">
+                  ~{outputTokens} tokens
+              </span>
+            )}
+        </div>
+        <CollapsibleContent className="space-y-2 pt-2">
+            <Textarea 
+                placeholder="Paste the model's output here to count tokens..."
+                value={outputText}
+                onChange={(e) => setOutputText(e.target.value)}
+                rows={5}
+                disabled={isSubmitting}
+            />
+        </CollapsibleContent>
+      </Collapsible>
       <Button type="submit" disabled={isSubmitting}>
         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
         Log Prompt

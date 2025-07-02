@@ -158,6 +158,7 @@ export function PromptList({
             <TableRow>
               <TableHead className="md:whitespace-nowrap">Model</TableHead>
               <TableHead>Note</TableHead>
+              <TableHead className="whitespace-nowrap text-center">Output Tokens</TableHead>
               <TableHead className="md:whitespace-nowrap">Timestamp</TableHead>
               <TableHead className="w-[50px] text-right"></TableHead>
             </TableRow>
@@ -191,6 +192,9 @@ export function PromptList({
                   ) : (
                     prompt.note
                   )}
+                </TableCell>
+                <TableCell className="whitespace-nowrap text-center font-mono text-sm">
+                  {prompt.output_tokens?.toLocaleString() ?? 'N/A'}
                 </TableCell>
                 <TableCell className="md:whitespace-nowrap">
                   {new Date(prompt.timestamp).toLocaleString()}

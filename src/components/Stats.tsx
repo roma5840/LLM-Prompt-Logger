@@ -49,10 +49,24 @@ const CustomLegend = (props: any) => {
   );
 };
 
+const formatLargeNumber = (num: number): string => {
+  if (num >= 1_000_000_000) {
+    return (num / 1_000_000_000).toFixed(1).replace(/\.0$/, '') + 'B';
+  }
+  if (num >= 1_000_000) {
+    return (num / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+  }
+  if (num >= 1_000) {
+    return (num / 1_000).toFixed(1).replace(/\.0$/, '') + 'K';
+  }
+  return num.toLocaleString();
+};
+
 
 export function Stats({ history, models }: StatsProps) {
   const totalPrompts = history.length
   const dailyPrompts = history.filter(p => new Date(p.timestamp) >= getStartOfToday()).length
+  const totalOutputTokens = useMemo(() => history.reduce((acc, p) => acc + (p.output_tokens || 0), 0), [history]);
 
   const modelColorMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -117,13 +131,13 @@ export function Stats({ history, models }: StatsProps) {
   }, [history]);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       <Card>
         <CardHeader>
           <CardTitle>Total Prompts</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-4xl font-bold">{totalPrompts}</p>
+          <p className="text-4xl font-bold">{totalPrompts.toLocaleString()}</p>
         </CardContent>
       </Card>
       <Card>
@@ -131,10 +145,18 @@ export function Stats({ history, models }: StatsProps) {
           <CardTitle>Today's Prompts</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-4xl font-bold">{dailyPrompts}</p>
+          <p className="text-4xl font-bold">{dailyPrompts.toLocaleString()}</p>
         </CardContent>
       </Card>
-      <Card className="md:col-span-2">
+      <Card>
+        <CardHeader>
+          <CardTitle>Total Output Tokens</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-4xl font-bold">{formatLargeNumber(totalOutputTokens)}</p>
+        </CardContent>
+      </Card>
+      <Card className="md:col-span-2 lg:col-span-3">
         <CardHeader>
           <CardTitle>Model Distribution</CardTitle>
         </CardHeader>
@@ -157,7 +179,7 @@ export function Stats({ history, models }: StatsProps) {
           )}
         </CardContent>
       </Card>
-      <Card className="md:col-span-2 lg:col-span-4">
+      <Card className="md:col-span-2 lg:col-span-3">
         <CardHeader>
           <CardTitle>Daily Usage</CardTitle>
         </CardHeader>

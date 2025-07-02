@@ -12,7 +12,7 @@ interface DataContextType {
   syncKey: string | null;
   loading: boolean;
   syncing: boolean;
-  addPrompt: (model: string, note: string) => Promise<void>;
+  addPrompt: (model: string, note: string, outputTokens: number | null) => Promise<void>;
   updatePromptNote: (id: number, note: string) => Promise<void>;
   deletePrompt: (id: number) => Promise<void>;
   deleteAllPrompts: () => Promise<void>;
@@ -140,11 +140,11 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   }, [syncKey, refreshDataFromSupabase])
 
 
-  const addPrompt = async (model: string, note: string) => {
+  const addPrompt = async (model: string, note: string, outputTokens: number | null) => {
     if (syncKey) {
-      const optimisticPrompt: Prompt = { id: Date.now(), bucket_id: syncKey, model, note, timestamp: new Date() }
+      const optimisticPrompt: Prompt = { id: Date.now(), bucket_id: syncKey, model, note, output_tokens: outputTokens, timestamp: new Date() }
       setHistory(prev => [optimisticPrompt, ...prev])
-      const { error } = await supabase.rpc('add_new_prompt', { p_bucket_id: syncKey, p_model: model, p_note: note })
+      const { error } = await supabase.rpc('add_new_prompt', { p_bucket_id: syncKey, p_model: model, p_note: note, p_output_tokens: outputTokens })
       if (error) {
         console.error('Error adding prompt:', error)
         setHistory(prev => prev.filter(p => p.id !== optimisticPrompt.id))
@@ -155,7 +155,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         await promptsChannel.send({ type: 'broadcast', event: 'prompts_changed', payload: {} })
       }
     } else {
-      const newPrompt: Prompt = { id: Date.now() + Math.random(), model, note, timestamp: new Date() }
+      const newPrompt: Prompt = { id: Date.now() + Math.random(), model, note, output_tokens: outputTokens, timestamp: new Date() }
       setHistory(prev => [newPrompt, ...prev])
     }
   }
@@ -237,6 +237,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             p_bucket_id: newKey,
             p_model: entry.model,
             p_note: entry.note,
+            p_output_tokens: entry.output_tokens || null,
             p_timestamp: new Date(entry.timestamp).toISOString(),
           })
         }
@@ -316,12 +317,12 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
         dataToExport = {
             models: bucketData.models || [],
-            history: promptsData.map((p: any) => ({ model: p.model, note: p.note, timestamp: new Date(p.timestamp).toISOString() }))
+            history: promptsData.map((p: any) => ({ model: p.model, note: p.note, output_tokens: p.output_tokens || null, timestamp: new Date(p.timestamp).toISOString() }))
         };
     } else {
         dataToExport = {
             models: models,
-            history: history.map(p => ({ model: p.model, note: p.note, timestamp: new Date(p.timestamp).toISOString() }))
+            history: history.map(p => ({ model: p.model, note: p.note, output_tokens: p.output_tokens || null, timestamp: new Date(p.timestamp).toISOString() }))
         };
     }
 
@@ -356,6 +357,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
                         p_bucket_id: syncKey, 
                         p_model: entry.model, 
                         p_note: entry.note,
+                        p_output_tokens: entry.output_tokens || null,
                         p_timestamp: entry.timestamp
                     });
                 }
