@@ -113,12 +113,14 @@ export default function Home() {
             </div>
           </CardHeader>
           <CardContent>
-            <PromptList
-              loading={data.loading}
-              history={filteredHistory}
-              deletePrompt={data.deletePrompt}
-              updatePrompt={data.updatePrompt}
-            />
+            <div className="overflow-x-auto">
+              <PromptList
+                loading={data.loading}
+                history={filteredHistory}
+                deletePrompt={data.deletePrompt}
+                updatePrompt={data.updatePrompt}
+              />
+            </div>
           </CardContent>
         </Card>
       </main>

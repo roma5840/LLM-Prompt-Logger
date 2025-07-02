@@ -26,7 +26,7 @@ function MainContent({ children }: { children: React.ReactNode }) {
 
   return (
     <div className={cn(
-      "flex-1 flex flex-col transition-all duration-200 ease-linear"
+      "flex-1 flex flex-col transition-all duration-200 ease-linear min-w-0"
     )}>
       <header className="p-4 border-b flex items-center justify-between sticky top-0 bg-background/80 backdrop-blur-sm z-10">
         <SidebarTrigger />
@@ -162,7 +162,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
             </div>
           </SidebarContent>
           <SidebarFooter className="p-4 text-xs text-muted-foreground">
-            Version 1.5.13
+            Version 1.5.14
           </SidebarFooter>
         </Sidebar>
         
