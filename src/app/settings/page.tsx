@@ -86,6 +86,14 @@ export default function SettingsPage() {
     });
   }
 
+  const handleUnlinkDevice = () => {
+    data.unlinkDevice();
+    toast({
+      title: "Device Unlinked",
+      description: "This device has been unlinked and reset to its default state.",
+    });
+  };
+
   const handleMigrateToCloud = async () => {
     try {
       await data.migrateToCloud()
@@ -239,14 +247,35 @@ export default function SettingsPage() {
             <CardContent className="flex flex-col gap-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 {data.syncKey ? (
-                  <Dialog>
-                    <DialogTrigger asChild><Button className="w-full">Link Another Device</Button></DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader><DialogTitle>Scan QR Code</DialogTitle></DialogHeader>
-                      <div className="flex justify-center my-4"><canvas id="qr-code-canvas" ref={canvas => canvas && generateQrCode(data.syncKey!, canvas)}></canvas></div>
-                      <Input value={data.syncKey} readOnly />
-                    </DialogContent>
-                  </Dialog>
+                  <div className="space-y-2">
+                    <Dialog>
+                      <DialogTrigger asChild><Button className="w-full">Link Another Device</Button></DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader><DialogTitle>Scan QR Code</DialogTitle></DialogHeader>
+                        <div className="flex justify-center my-4"><canvas id="qr-code-canvas" ref={canvas => canvas && generateQrCode(data.syncKey!, canvas)}></canvas></div>
+                        <Input value={data.syncKey} readOnly />
+                      </DialogContent>
+                    </Dialog>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="outline" className="w-full">Unlink This Device</Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Unlink this device?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This will remove the sync key from this device and reset the app to its default state. Your data in the cloud will not be affected. You can link this device again later.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction className={buttonVariants({ variant: "destructive" })} onClick={handleUnlinkDevice}>
+                            Unlink Device
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
                 ) : (
                   <div className="space-y-2">
                     <AlertDialog>
@@ -296,7 +325,7 @@ export default function SettingsPage() {
           <Card className="border-destructive">
             <CardHeader>
               <CardTitle>Danger Zone</CardTitle>
-              <CardDescription className="text-destructive/90">These actions are permanent and cannot be undone.</CardDescription>
+              <CardDescription className="text-destructive/90">This action is permanent and cannot be undone.</CardDescription>
             </CardHeader>
             <CardContent>
               <AlertDialog>

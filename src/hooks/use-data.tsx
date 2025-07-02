@@ -19,6 +19,7 @@ interface DataContextType {
   updateUserModels: (newModels: Model[]) => Promise<void>;
   migrateToCloud: () => Promise<void>;
   linkDeviceWithKey: (key: string) => Promise<void>;
+  unlinkDevice: () => void;
   handleExportData: () => Promise<void>;
   handleImportData: (file: File) => Promise<void>;
   setHistory: React.Dispatch<React.SetStateAction<Prompt[]>>;
@@ -271,6 +272,13 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       setSyncing(false)
     }
   }
+
+  const unlinkDevice = useCallback(() => {
+    localStorage.removeItem(SYNC_KEY_STORAGE);
+    setSyncKey(null);
+    setHistory([]);
+    setModels(DEFAULT_MODELS);
+  }, []);
   
   const handleExportData = async () => {
     let dataToExport;
@@ -372,6 +380,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     updateUserModels,
     migrateToCloud,
     linkDeviceWithKey,
+    unlinkDevice,
     handleExportData,
     handleImportData,
     setHistory,
