@@ -79,7 +79,7 @@ export function PromptLogger({ addPrompt, models, onPromptLogged, isSubmitting, 
           value={note}
           onChange={e => setNote(e.target.value)}
           placeholder="Enter prompt notes or tags..."
-          rows={4}
+          rows={7}
           maxLength={NOTE_MAX_LENGTH}
           disabled={isSubmitting}
         />

@@ -94,6 +94,22 @@ export default function SettingsPage() {
     });
   };
 
+  const handleDeleteAccount = async () => {
+    try {
+      await data.deleteAccount();
+      toast({
+        title: "Account Deleted",
+        description: "Your cloud account has been permanently deleted.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Deletion Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleMigrateToCloud = async () => {
     try {
       await data.migrateToCloud()
@@ -325,28 +341,55 @@ export default function SettingsPage() {
           <Card className="border-destructive">
             <CardHeader>
               <CardTitle>Danger Zone</CardTitle>
-              <CardDescription className="text-destructive/90">This action is permanent and cannot be undone.</CardDescription>
+              <CardDescription className="text-destructive/90">These actions are permanent and cannot be undone.</CardDescription>
             </CardHeader>
             <CardContent>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive">Delete All Data</Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This action cannot be undone. This will permanently delete all your prompt history.{data.syncKey ? " This will affect all synced devices." : ""}
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction className={buttonVariants({ variant: "destructive" })} onClick={handleDeleteAllData}>
-                      Delete All Data
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+              <div className="flex flex-wrap gap-4">
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" disabled={!data.syncKey}>Delete All Synced Data</Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This action cannot be undone. This will permanently delete all prompt history from your cloud account, affecting all synced devices.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction className={buttonVariants({ variant: "destructive" })} onClick={handleDeleteAllData}>
+                        Delete All Data
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" disabled={!data.syncKey}>Delete Account</Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete your account?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will permanently delete your entire cloud account, including your sync key, all models, and all prompt history. This action cannot be undone and will unlink all connected devices.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel disabled={data.syncing}>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        className={buttonVariants({ variant: "destructive" })}
+                        onClick={handleDeleteAccount}
+                        disabled={data.syncing}
+                      >
+                        {data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Delete Account Permanently
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
             </CardContent>
           </Card>
         </div>

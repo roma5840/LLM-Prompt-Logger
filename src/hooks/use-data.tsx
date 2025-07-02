@@ -16,6 +16,7 @@ interface DataContextType {
   updatePromptNote: (id: number, note: string) => Promise<void>;
   deletePrompt: (id: number) => Promise<void>;
   deleteAllPrompts: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
   updateUserModels: (newModels: Model[]) => Promise<void>;
   migrateToCloud: () => Promise<void>;
   linkDeviceWithKey: (key: string) => Promise<void>;
@@ -279,6 +280,21 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     setHistory([]);
     setModels(DEFAULT_MODELS);
   }, []);
+
+  const deleteAccount = async () => {
+    if (!syncKey) return;
+    setSyncing(true)
+    try {
+      const { error } = await supabase.rpc('delete_my_account', { p_bucket_id: syncKey })
+      if (error) {
+        console.error('Error deleting account:', error);
+        throw new Error('Could not delete account. Please try again.');
+      }
+      unlinkDevice();
+    } finally {
+      setSyncing(false)
+    }
+  }
   
   const handleExportData = async () => {
     let dataToExport;
@@ -377,6 +393,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     updatePromptNote,
     deletePrompt,
     deleteAllPrompts,
+    deleteAccount,
     updateUserModels,
     migrateToCloud,
     linkDeviceWithKey,
