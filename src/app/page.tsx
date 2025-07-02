@@ -9,10 +9,16 @@ import { PromptList } from '@/components/PromptList'
 import { Welcome } from '@/components/Welcome'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { DateRangePicker } from '@/components/ui/date-range-picker'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Search, Loader2 } from 'lucide-react'
+import { Search, Loader2, ChevronDown } from 'lucide-react'
 import { MainLayout } from '@/components/MainLayout'
 
 const getDefaultDateRange = (): DateRange => {
@@ -97,19 +103,26 @@ export default function Home() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Dashboard</h1>
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-            <Select value={filterModel} onValueChange={setFilterModel}>
-              <SelectTrigger className="w-full sm:w-[180px]">
-                <SelectValue placeholder="Filter by model" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Models</SelectItem>
-                {data.models.map(model => (
-                  <SelectItem key={model} value={model}>
-                    {model}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <DropdownMenu modal={false}>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="w-full sm:w-[180px] justify-between font-normal">
+                  <span className="truncate">
+                    {filterModel === 'all' ? 'All Models' : data.models.find(m => m === filterModel) || 'All Models'}
+                  </span>
+                  <ChevronDown className="h-4 w-4 opacity-50" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-[var(--radix-dropdown-menu-trigger-width)]">
+                <DropdownMenuRadioGroup value={filterModel} onValueChange={setFilterModel}>
+                  <DropdownMenuRadioItem value="all">All Models</DropdownMenuRadioItem>
+                  {data.models.map(model => (
+                    <DropdownMenuRadioItem key={model} value={model}>
+                      {model}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <DateRangePicker date={dateRange} setDate={setDateRange} />
             <Button variant="ghost" onClick={clearFilters}>Clear</Button>
           </div>
