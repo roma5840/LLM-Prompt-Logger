@@ -1,12 +1,11 @@
 // src/app/page.tsx
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import type { DateRange } from "react-day-picker"
 import { useData } from '@/hooks/use-data'
 import { Stats } from '@/components/Stats'
 import { PromptList } from '@/components/PromptList'
-import { Welcome } from '@/components/Welcome'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { DateRangePicker } from '@/components/ui/date-range-picker'
 import {
@@ -18,7 +17,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Search, Loader2, ChevronDown } from 'lucide-react'
+import { Search, ChevronDown } from 'lucide-react'
 import { MainLayout } from '@/components/MainLayout'
 
 const getDefaultDateRange = (): DateRange => {
@@ -28,33 +27,11 @@ const getDefaultDateRange = (): DateRange => {
   return { from, to };
 };
 
-const WELCOME_DISMISSED_KEY = 'promptlog_welcome_dismissed';
-
 export default function Home() {
   const data = useData()
   const [filterModel, setFilterModel] = useState<string>('all')
   const [dateRange, setDateRange] = useState<DateRange | undefined>(getDefaultDateRange())
   const [searchQuery, setSearchQuery] = useState('')
-  const [showWelcome, setShowWelcome] = useState(false);
-  const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(true);
-
-  useEffect(() => {
-    if (data.loading) {
-      return;
-    }
-    const welcomeDismissed = localStorage.getItem(WELCOME_DISMISSED_KEY);
-    const isNewUser = data.history.length === 0 && !data.syncKey;
-
-    if (isNewUser && !welcomeDismissed) {
-      setShowWelcome(true);
-    }
-    setIsCheckingOnboarding(false);
-  }, [data.loading, data.history, data.syncKey]);
-
-  const handleGetStarted = () => {
-    localStorage.setItem(WELCOME_DISMISSED_KEY, 'true');
-    setShowWelcome(false);
-  };
 
   const filteredHistory = useMemo(() => {
     const query = searchQuery.toLowerCase();
@@ -87,16 +64,7 @@ export default function Home() {
     setDateRange(undefined)
     setSearchQuery('')
   }
-  if (isCheckingOnboarding) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-  if (showWelcome) {
-    return <Welcome onGetStarted={handleGetStarted} />;
-  }
+
   return (
     <MainLayout>
       <main className="flex-1 py-4 md:py-6 lg:py-8 flex flex-col gap-6">

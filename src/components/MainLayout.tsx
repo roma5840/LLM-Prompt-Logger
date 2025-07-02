@@ -1,13 +1,14 @@
 // src/components/MainLayout.tsx
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { SidebarProvider, Sidebar, SidebarTrigger, SidebarContent, SidebarHeader, SidebarFooter, useSidebar } from '@/components/ui/sidebar'
 import { PromptLogger } from '@/components/PromptLogger'
+import { Welcome } from '@/components/Welcome'
 import { useData } from '@/hooks/use-data'
-import { BotMessageSquare, LayoutDashboard, Settings, Plus } from 'lucide-react'
+import { BotMessageSquare, LayoutDashboard, Settings, Plus, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   Dialog,
@@ -18,6 +19,8 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Separator } from './ui/separator'
+
+const WELCOME_DISMISSED_KEY = 'promptlog_welcome_dismissed';
 
 function MainContent({ children }: { children: React.ReactNode }) {
 
@@ -73,10 +76,42 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
   const data = useData()
   const [isLoggerOpen, setIsLoggerOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(true);
+
+  useEffect(() => {
+    if (data.loading) {
+      return;
+    }
+    const welcomeDismissed = localStorage.getItem(WELCOME_DISMISSED_KEY);
+    const isNewUser = data.history.length === 0 && !data.syncKey;
+
+    if (isNewUser && !welcomeDismissed) {
+      setShowWelcome(true);
+    }
+    setIsCheckingOnboarding(false);
+  }, [data.loading, data.history, data.syncKey]);
+
+  const handleGetStarted = () => {
+    localStorage.setItem(WELCOME_DISMISSED_KEY, 'true');
+    setShowWelcome(false);
+  };
 
   const handlePromptLogged = () => {
     setIsLoggerOpen(false);
   };
+
+  if (isCheckingOnboarding) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (showWelcome) {
+    return <Welcome onGetStarted={handleGetStarted} />;
+  }
 
   return (
     <SidebarProvider>
@@ -127,7 +162,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
             </div>
           </SidebarContent>
           <SidebarFooter className="p-4 text-xs text-muted-foreground">
-            Version 1.5.12
+            Version 1.5.13
           </SidebarFooter>
         </Sidebar>
         
