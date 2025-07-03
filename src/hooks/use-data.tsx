@@ -84,7 +84,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   }, [history, localOnlyHistory]);
 
   const lock = useCallback(() => {
-    sessionStorage.removeItem(SESSION_MASTER_PASSWORD_STORAGE);
+    localStorage.removeItem(SESSION_MASTER_PASSWORD_STORAGE);
     setEncryptionKey(null);
     setMasterPassword(null);
     setIsLocked(true);
@@ -97,7 +97,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     });
     const preservedModels = modelsRef.current;
 
-    sessionStorage.removeItem(SESSION_MASTER_PASSWORD_STORAGE);
+    localStorage.removeItem(SESSION_MASTER_PASSWORD_STORAGE);
     localStorage.removeItem(SYNC_KEY_STORAGE);
     localStorage.removeItem(SALT_STORAGE);
     localStorage.removeItem(LOCAL_ONLY_HISTORY_STORAGE);
@@ -204,7 +204,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             throw new Error("Invalid master password.");
         }
 
-        sessionStorage.setItem(SESSION_MASTER_PASSWORD_STORAGE, password);
+        localStorage.setItem(SESSION_MASTER_PASSWORD_STORAGE, password);
         setEncryptionKey(derivedKey);
         setMasterPassword(password);
         setIsLocked(false);
@@ -221,12 +221,12 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         const key = localStorage.getItem(SYNC_KEY_STORAGE);
         if (key) {
             setSyncKey(key);
-            const sessionPassword = sessionStorage.getItem(SESSION_MASTER_PASSWORD_STORAGE);
-            if (sessionPassword) {
+            const persistentPassword = localStorage.getItem(SESSION_MASTER_PASSWORD_STORAGE);
+            if (persistentPassword) {
                 // Session is active, try to unlock automatically
-                await unlock(sessionPassword).catch(err => {
-                    console.error("Session unlock failed, locking app.", err);
-                    lock(); // Lock if session password becomes invalid
+                await unlock(persistentPassword).catch(err => {
+                    console.error("Persistent unlock failed, locking app.", err);
+                    lock(); // Lock if password becomes invalid
                 });
             } else {
                 // No session, app is locked
@@ -494,7 +494,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       localStorage.setItem(SYNC_KEY_STORAGE, newKey);
       localStorage.setItem(SALT_STORAGE, salt);
       localStorage.setItem(LOCAL_ONLY_HISTORY_STORAGE, JSON.stringify(finalLocalNotes));
-      sessionStorage.setItem(SESSION_MASTER_PASSWORD_STORAGE, password);
+      localStorage.setItem(SESSION_MASTER_PASSWORD_STORAGE, password);
       localStorage.removeItem(LOCAL_HISTORY_STORAGE);
       localStorage.removeItem(LOCAL_MODELS_STORAGE);
       
@@ -534,7 +534,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
         localStorage.setItem(SYNC_KEY_STORAGE, key)
         localStorage.setItem(SALT_STORAGE, salt);
-        sessionStorage.setItem(SESSION_MASTER_PASSWORD_STORAGE, password);
+        localStorage.setItem(SESSION_MASTER_PASSWORD_STORAGE, password);
         localStorage.removeItem(LOCAL_HISTORY_STORAGE)
         localStorage.removeItem(LOCAL_MODELS_STORAGE)
         
