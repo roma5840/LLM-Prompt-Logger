@@ -14,6 +14,7 @@ import {
   DialogTitle,
   DialogTrigger,
   DialogFooter,
+  DialogDescription,
 } from '@/components/ui/dialog'
 import {
   AlertDialog,
@@ -29,7 +30,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import QRCode from 'qrcode'
 import { Html5Qrcode } from 'html5-qrcode'
-import { Loader2, AlertTriangle } from 'lucide-react'
+import { Loader2, AlertTriangle, ShieldCheck, ShieldOff } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Separator } from '@/components/ui/separator'
 
@@ -42,6 +43,7 @@ export default function SettingsPage() {
 
   const [newModel, setNewModel] = useState('')
   const [manualSyncKey, setManualSyncKey] = useState('')
+  const [masterPassword, setMasterPassword] = useState('')
   const [isLinkDeviceDialogOpen, setLinkDeviceDialogOpen] = useState(false)
   const [fileToImport, setFileToImport] = useState<File | null>(null)
   const [isMigrateDialogOpen, setIsMigrateDialogOpen] = useState(false)
@@ -59,6 +61,8 @@ export default function SettingsPage() {
 
   const estimatedStorage = useMemo(() => {
     if (!data.syncKey || !data.history) return 0;
+    // This calculation is now an estimate of the PLAINTEXT size.
+    // Ciphertext size will be slightly larger due to IV and padding.
     const totalBytes = data.history.reduce((acc, prompt) => {
         const modelBytes = new TextEncoder().encode(prompt.model).length;
         const noteBytes = new TextEncoder().encode(prompt.note).length;
@@ -116,13 +120,18 @@ export default function SettingsPage() {
   };
 
   const handleMigrateToCloud = async () => {
+    if (!masterPassword) {
+      toast({ title: "Password Required", description: "Please set a master password.", variant: "destructive" });
+      return;
+    }
     try {
-      await data.migrateToCloud()
+      await data.migrateToCloud(masterPassword)
       toast({
         title: "Success!",
-        description: "Cloud sync has been enabled.",
+        description: "Cloud sync has been enabled and your data is encrypted.",
       })
       setIsMigrateDialogOpen(false)
+      setMasterPassword('')
     } catch (error: any) {
       toast({
         title: "Error",
@@ -132,15 +141,19 @@ export default function SettingsPage() {
     }
   }
 
-  const handleLinkDevice = async (key: string) => {
-    if (!key) return
+  const handleLinkDevice = async () => {
+    if (!manualSyncKey || !masterPassword) {
+      toast({ title: "Missing Information", description: "Please provide both a Sync Key and your Master Password.", variant: "destructive" });
+      return;
+    }
     try {
-      await data.linkDeviceWithKey(key)
+      await data.linkDeviceWithKey(manualSyncKey, masterPassword)
       setLinkDeviceDialogOpen(false)
       setManualSyncKey('')
+      setMasterPassword('')
       toast({
         title: "Success!",
-        description: "This device has been linked.",
+        description: "This device has been linked and your data decrypted.",
       })
     } catch (error: any) {
       toast({
@@ -149,6 +162,12 @@ export default function SettingsPage() {
         variant: "destructive",
       })
     }
+  }
+  
+  const handleLinkWithQrCode = async (key: string) => {
+      setManualSyncKey(key);
+      const scannerElement = document.getElementById('qr-reader');
+      if (scannerElement) scannerElement.innerHTML = '<p class="text-center text-green-600">Sync Key scanned! Now enter your Master Password below and click Link.</p>';
   }
 
   const handleImport = async () => {
@@ -264,24 +283,29 @@ export default function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Sync & Data Management</CardTitle>
-              <CardDescription>Enable cloud sync or manage your local data.</CardDescription>
+              <CardDescription>
+                {data.syncKey ? "Manage your end-to-end encrypted cloud sync." : "Enable E2EE cloud sync or manage local data."}
+              </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-6">
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                 <div>
-                  <h3 className="font-medium leading-none">
-                    {data.syncKey ? "Cloud Sync Enabled" : "Cloud Sync"}
+                  <h3 className="font-medium leading-none flex items-center gap-2">
+                    {data.syncKey ? <><ShieldCheck className="h-4 w-4 text-green-600" />E2E Cloud Sync Enabled</> : "Cloud Sync"}
                   </h3>
                   <p className="text-sm text-muted-foreground mt-1">
                     {data.syncKey 
-                        ? "Link more devices or unlink this one." 
-                        : "Enable sync or link this device to an existing account."
+                        ? "Your data is encrypted and unreadable by the server." 
+                        : "Enable sync to encrypt and back up your data."
                     }
                   </p>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-2 shrink-0">
                   {data.syncKey ? (
                     <>
+                      <Button variant="outline" onClick={data.lock}>
+                        <ShieldOff className="mr-2 h-4 w-4" /> Lock App
+                      </Button>
                       <Dialog>
                         <DialogTrigger asChild><Button>Link Another Device</Button></DialogTrigger>
                         <DialogContent>
@@ -298,7 +322,7 @@ export default function SettingsPage() {
                           <AlertDialogHeader>
                             <AlertDialogTitle>Unlink this device?</AlertDialogTitle>
                             <AlertDialogDescription>
-                              This will remove the sync key from this device and reset the app to its default state. Your data in the cloud will not be affected. You can link this device again later.
+                              This will remove the sync key and encryption key from this device and reset the app. Your encrypted data in the cloud will not be affected.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
@@ -312,54 +336,64 @@ export default function SettingsPage() {
                     </>
                   ) : (
                     <>
-                      <AlertDialog open={isMigrateDialogOpen} onOpenChange={(open) => !data.syncing && setIsMigrateDialogOpen(open)}>
-                        <AlertDialogTrigger asChild>
+                      <Dialog open={isMigrateDialogOpen} onOpenChange={(open) => !data.syncing && setIsMigrateDialogOpen(open)}>
+                        <DialogTrigger asChild>
                           <Button disabled={data.syncing}>
                             {data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Enable Cloud Sync
                           </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Enable Cloud Sync?</AlertDialogTitle>
-                          </AlertDialogHeader>
-                          <div className="space-y-4">
-                            <Alert>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Enable End-to-End Encrypted Sync</DialogTitle>
+                            <DialogDescription>Create a master password to encrypt your data.</DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4 py-4">
+                            <Alert variant="destructive">
                               <AlertTriangle className="h-4 w-4" />
-                              <AlertTitle>Data Retention Policy</AlertTitle>
+                              <AlertTitle>IMPORTANT: Save Your Password!</AlertTitle>
                               <AlertDescription>
-                                To maintain service performance, prompts older than 90 days are automatically deleted from the cloud.
+                                This password encrypts your data. We cannot see it and cannot recover it for you. If you forget this password, your synced data will be permanently lost.
                               </AlertDescription>
                             </Alert>
-                            <AlertDialogDescription>
-                              This will upload your local data to a new, secure cloud account, allowing you to sync across devices. Are you sure you want to continue?
-                            </AlertDialogDescription>
+                            <Input 
+                                type="password" 
+                                placeholder="Create a strong master password" 
+                                value={masterPassword}
+                                onChange={e => setMasterPassword(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && handleMigrateToCloud()}
+                                disabled={data.syncing}
+                            />
                           </div>
-                          <AlertDialogFooter className="pt-2">
-                            <AlertDialogCancel disabled={data.syncing}>Cancel</AlertDialogCancel>
-                            <Button onClick={handleMigrateToCloud} disabled={data.syncing}>
-                              {data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Enable Sync
+                          <DialogFooter className="pt-2">
+                             <Button variant="outline" onClick={() => setIsMigrateDialogOpen(false)} disabled={data.syncing}>Cancel</Button>
+                            <Button onClick={handleMigrateToCloud} disabled={data.syncing || !masterPassword}>
+                              {data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Enable & Encrypt
                             </Button>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
                       <Dialog open={isLinkDeviceDialogOpen} onOpenChange={setLinkDeviceDialogOpen}>
                         <DialogTrigger asChild><Button variant="outline">Link This Device</Button></DialogTrigger>
                         <DialogContent>
-                          <DialogHeader><DialogTitle>Scan or Enter Sync Key</DialogTitle></DialogHeader>
-                          <div className="space-y-4">
-                            <Alert>
-                              <AlertTriangle className="h-4 w-4" />
-                              <AlertTitle>Data Retention Policy</AlertTitle>
-                              <AlertDescription>
-                                By linking your device, you acknowledge that any synced prompts older than 90 days will be automatically deleted to maintain service performance.
-                              </AlertDescription>
-                            </Alert>
+                           <DialogHeader>
+                            <DialogTitle>Link Device & Decrypt Data</DialogTitle>
+                            <DialogDescription>Enter the Sync Key from another device and your Master Password.</DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4 py-4">
                             <div id="qr-reader" className="my-2"></div>
-                            <Input placeholder="Enter sync key manually" value={manualSyncKey} onChange={e => setManualSyncKey(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLinkDevice(manualSyncKey)} disabled={data.syncing} />
+                            <Input placeholder="Enter Sync Key" value={manualSyncKey} onChange={e => setManualSyncKey(e.target.value)} disabled={data.syncing} />
+                            <Input 
+                                type="password" 
+                                placeholder="Enter your Master Password" 
+                                value={masterPassword}
+                                onChange={e => setMasterPassword(e.target.value)} 
+                                onKeyDown={e => e.key === 'Enter' && handleLinkDevice()}
+                                disabled={data.syncing} 
+                            />
                           </div>
                           <DialogFooter className="gap-y-2 sm:gap-x-2 flex-col sm:flex-row pt-4">
-                            <Button variant="secondary" onClick={() => startQrScanner(key => handleLinkDevice(key))} disabled={data.syncing}>Start Scanner</Button>
-                            <Button onClick={() => handleLinkDevice(manualSyncKey)} disabled={data.syncing || !manualSyncKey}>{data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Link</Button>
+                            <Button variant="secondary" onClick={() => startQrScanner(key => handleLinkWithQrCode(key))} disabled={data.syncing}>Scan QR</Button>
+                            <Button onClick={handleLinkDevice} disabled={data.syncing || !manualSyncKey || !masterPassword}>{data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Link & Decrypt</Button>
                           </DialogFooter>
                         </DialogContent>
                       </Dialog>
@@ -370,10 +404,10 @@ export default function SettingsPage() {
 
               <Separator />
 
-              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              <div className="flex flex-col sm:-row sm:items-start sm:justify-between gap-4">
                 <div>
                   <h3 className="font-medium leading-none">Data Portability</h3>
-                  <p className="text-sm text-muted-foreground mt-1">Export your data or import from a backup file.</p>
+                  <p className="text-sm text-muted-foreground mt-1">Export your decrypted data or import from a backup.</p>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-2 shrink-0">
                   <Button onClick={data.handleExportData} variant="outline">Export Data</Button>
@@ -389,8 +423,8 @@ export default function SettingsPage() {
               
               {data.syncKey && data.history.length > 0 && (
                 <div className="text-xs text-center text-muted-foreground p-2 border rounded-md bg-muted/50">
-                  <p>Estimated Cloud Storage: <span className="font-semibold">{formattedSize}</span></p>
-                  <p className="mt-1">Based on {data.history.length} synced prompts.</p>
+                  <p>Estimated Original Data Size: <span className="font-semibold">{formattedSize}</span></p>
+                  <p className="mt-1">Based on {data.history.length} synced prompts. Stored size will be larger due to encryption.</p>
                 </div>
               )}
             </CardContent>
@@ -413,7 +447,7 @@ export default function SettingsPage() {
                         <AlertDialogHeader>
                           <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                           <AlertDialogDescription>
-                            This action cannot be undone. This will permanently delete all prompt history from your cloud account, affecting all synced devices.
+                            This will permanently delete all encrypted prompt history from your cloud account, affecting all synced devices. This cannot be undone.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
@@ -433,7 +467,7 @@ export default function SettingsPage() {
                         <AlertDialogHeader>
                           <AlertDialogTitle>Delete your account?</AlertDialogTitle>
                           <AlertDialogDescription>
-                            This will permanently delete your entire cloud account, including your sync key, all models, and all prompt history. This action cannot be undone and will unlink all connected devices.
+                            This will permanently delete your entire cloud account, including your sync key, salt, models, and all encrypted prompt history. This cannot be undone.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
@@ -459,7 +493,7 @@ export default function SettingsPage() {
                       <AlertDialogHeader>
                         <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                         <AlertDialogDescription>
-                          This action cannot be undone. This will permanently delete all prompt history from this device's local storage. Your models list will not be affected.
+                          This will permanently delete all prompt history from this device's local storage.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
@@ -481,7 +515,7 @@ export default function SettingsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Overwrite Data?</AlertDialogTitle>
             <AlertDialogDescription>
-              {data.syncKey ? 'This will overwrite all current cloud data with the contents of this file. This action cannot be undone.' : 'This will overwrite all your local data with the contents of this file. This action cannot be undone.'}
+              {data.syncKey ? 'This will overwrite and re-encrypt all current cloud data with the contents of this file. This cannot be undone.' : 'This will overwrite all your local data. This cannot be undone.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

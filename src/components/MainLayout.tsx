@@ -8,7 +8,7 @@ import { SidebarProvider, Sidebar, SidebarTrigger, SidebarContent, SidebarHeader
 import { PromptLogger } from '@/components/PromptLogger'
 import { Welcome } from '@/components/Welcome'
 import { useData } from '@/hooks/use-data'
-import { BotMessageSquare, LayoutDashboard, Settings, Plus, Loader2 } from 'lucide-react'
+import { BotMessageSquare, LayoutDashboard, Settings, Plus, Loader2, Shield } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   Dialog,
@@ -19,8 +19,59 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Separator } from './ui/separator'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle as CardTitleUI } from '@/components/ui/card'
+import { Input } from './ui/input'
+import { useToast } from '@/hooks/use-toast'
+
 
 const WELCOME_DISMISSED_KEY = 'promptlog_welcome_dismissed';
+
+function UnlockScreen() {
+  const { unlock, syncing } = useData();
+  const { toast } = useToast();
+  const [password, setPassword] = useState('');
+
+  const handleUnlock = async () => {
+    if (!password) {
+      toast({ title: 'Password required', variant: 'destructive' });
+      return;
+    }
+    try {
+      await unlock(password);
+    } catch (error: any) {
+      toast({ title: 'Unlock Failed', description: error.message, variant: 'destructive' });
+    }
+  };
+
+  return (
+    <div className="flex min-h-screen w-full items-center justify-center bg-background p-4">
+      <Card className="w-full max-w-sm">
+        <CardHeader className="text-center">
+          <div className="mx-auto bg-primary/10 rounded-full p-3 w-fit mb-4">
+            <Shield className="w-10 h-10 text-primary" />
+          </div>
+          <CardTitleUI>Unlock Your Data</CardTitleUI>
+          <CardDescription>Enter your master password to decrypt and access your data.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          <Input 
+            type="password" 
+            placeholder="Master Password" 
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleUnlock()}
+            disabled={syncing}
+          />
+          <Button onClick={handleUnlock} disabled={syncing || !password}>
+            {syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Unlock
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 
 function MainContent({ children }: { children: React.ReactNode }) {
 
@@ -112,6 +163,10 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
   if (showWelcome) {
     return <Welcome onGetStarted={handleGetStarted} />;
   }
+  
+  if (data.isLocked) {
+    return <UnlockScreen />;
+  }
 
   return (
     <SidebarProvider>
@@ -162,7 +217,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
             </div>
           </SidebarContent>
           <SidebarFooter className="p-4 text-xs text-muted-foreground">
-            Version 1.5.19
+            Version 1.6.01
           </SidebarFooter>
         </Sidebar>
         
