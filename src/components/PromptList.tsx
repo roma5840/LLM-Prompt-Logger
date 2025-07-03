@@ -130,12 +130,6 @@ export function PromptList({
     return Math.ceil(outputText.length / 4);
   }, [outputText]);
 
-  useEffect(() => {
-    if (isOutputOpen) {
-      setEditedTokens(calculatedTokens > 0 ? calculatedTokens : null);
-    }
-  }, [calculatedTokens, isOutputOpen]);
-
   const handleEdit = (prompt: Prompt) => {
     setEditingPrompt(prompt)
     setEditedNote(prompt.note)
@@ -150,6 +144,14 @@ export function PromptList({
       setEditingPrompt(null)
     }
   }
+
+  const handleApplyRecalculatedTokens = () => {
+    const newTokens = calculatedTokens > 0 ? calculatedTokens : null;
+    if (newTokens !== editedTokens) {
+        setEditedTokens(newTokens);
+    }
+    setOutputText('');
+  };
 
   if (loading) {
     return (
@@ -288,9 +290,20 @@ export function PromptList({
                                     onChange={(e) => setOutputText(e.target.value)}
                                     rows={5}
                                 />
-                                <p className="text-xs text-muted-foreground text-center">
-                                  Recalculated tokens: ~{calculatedTokens.toLocaleString()}
-                                </p>
+                                <div className="flex justify-center items-center gap-4 text-xs text-muted-foreground">
+                                    <p>Recalculated tokens: ~{calculatedTokens.toLocaleString()}</p>
+                                    {outputText && (
+                                        <Button
+                                            type="button"
+                                            variant="link"
+                                            size="sm"
+                                            className="h-auto p-0 text-xs"
+                                            onClick={handleApplyRecalculatedTokens}
+                                        >
+                                            Apply
+                                        </Button>
+                                    )}
+                                </div>
                             </CollapsibleContent>
                           </Collapsible>
                         </div>
