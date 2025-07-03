@@ -34,7 +34,7 @@ const features = [
 
 export function Welcome({ onGetStarted }: WelcomeProps) {
   return (
-    <div className="flex-1 flex items-center justify-center p-4 md:p-6 lg:p-8 bg-background">
+    <div className="flex min-h-screen items-center justify-center p-4 md:p-6 lg:p-8 bg-background">
       <div className="max-w-4xl w-full mx-auto">
         <Card className="border-0 md:border shadow-none md:shadow-sm">
           <CardHeader className="text-center p-8">
