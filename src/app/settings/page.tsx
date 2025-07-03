@@ -47,6 +47,8 @@ export default function SettingsPage() {
   const [isLinkDeviceDialogOpen, setLinkDeviceDialogOpen] = useState(false)
   const [fileToImport, setFileToImport] = useState<File | null>(null)
   const [isMigrateDialogOpen, setIsMigrateDialogOpen] = useState(false)
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
+
 
   const isModelLimitReached = data.models.length >= MODEL_LIMIT;
 
@@ -170,6 +172,14 @@ export default function SettingsPage() {
       if (scannerElement) scannerElement.innerHTML = '<p class="text-center text-green-600">Sync Key scanned! Now enter your Master Password below and click Link.</p>';
   }
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files ? e.target.files[0] : null;
+    if (file) {
+      setFileToImport(file);
+      setIsImportDialogOpen(true);
+    }
+  };
+
   const handleImport = async () => {
     if (!fileToImport) return;
     try {
@@ -178,16 +188,19 @@ export default function SettingsPage() {
             title: "Import Successful",
             description: "Your data has been imported.",
         });
+        setIsImportDialogOpen(false);
     } catch (error: any) {
         toast({
             title: "Import Failed",
             description: error.message,
             variant: "destructive",
         });
+        // Keep dialog open on failure
     } finally {
-        setFileToImport(null);
+        // Reset file input so the same file can be selected again
         const fileInput = document.getElementById('import-file-input') as HTMLInputElement;
         if (fileInput) fileInput.value = '';
+        setFileToImport(null);
     }
   }
   
@@ -404,19 +417,20 @@ export default function SettingsPage() {
 
               <Separator />
 
-              <div className="flex flex-col sm:-row sm:items-start sm:justify-between gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                 <div>
                   <h3 className="font-medium leading-none">Data Portability</h3>
                   <p className="text-sm text-muted-foreground mt-1">Export your decrypted data or import from a backup.</p>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-2 shrink-0">
-                  <Button onClick={data.handleExportData} variant="outline">Export Data</Button>
+                  <Button onClick={data.handleExportData} variant="outline" disabled={data.isLocked}>Export Data</Button>
                   <Input
                     id="import-file-input"
                     type="file"
                     accept=".json"
-                    onChange={e => setFileToImport(e.target.files ? e.target.files[0] : null)}
+                    onChange={handleFileSelect}
                     className="sm:max-w-xs"
+                    disabled={data.isLocked}
                   />
                 </div>
               </div>
@@ -441,7 +455,7 @@ export default function SettingsPage() {
                   <>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="destructive" disabled={data.history.length === 0}>Delete All Synced Data</Button>
+                        <Button variant="destructive" disabled={data.history.length === 0 || data.isLocked}>Delete All Synced Data</Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
@@ -461,7 +475,7 @@ export default function SettingsPage() {
 
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="destructive">Delete Account</Button>
+                        <Button variant="destructive" disabled={data.isLocked}>Delete Account</Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
@@ -510,17 +524,20 @@ export default function SettingsPage() {
           </Card>
         </div>
       </main>
-      <AlertDialog open={!!fileToImport} onOpenChange={(open) => { if (!open) setFileToImport(null); }}>
+      <AlertDialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Overwrite Data?</AlertDialogTitle>
+            <AlertDialogTitle>Confirm Data Import</AlertDialogTitle>
             <AlertDialogDescription>
-              {data.syncKey ? 'This will overwrite and re-encrypt all current cloud data with the contents of this file. This cannot be undone.' : 'This will overwrite all your local data. This cannot be undone.'}
+              {data.syncKey ? 'This will overwrite and re-encrypt all current cloud data with the contents of this file. This action cannot be undone.' : 'This will overwrite all your local data with the contents of this file. This action cannot be undone.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={data.syncing}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleImport} disabled={data.syncing}>{data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Import</AlertDialogAction>
+            <AlertDialogCancel disabled={data.syncing} onClick={() => setIsImportDialogOpen(false)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleImport} disabled={data.syncing}>
+                {data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Import
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

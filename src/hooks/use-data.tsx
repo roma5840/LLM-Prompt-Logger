@@ -341,17 +341,24 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       }
 
       if (localHistory.length > 0) {
-        for (const entry of localHistory) {
-          const encryptedNote = await encrypt(entry.note, derivedKey);
-          const encryptedTokens = entry.output_tokens !== null ? await encrypt(String(entry.output_tokens), derivedKey) : null;
-          await supabase.rpc('add_new_prompt', {
+        // Use Promise.all to encrypt all prompts in parallel for performance.
+        const encryptedHistoryBatch = await Promise.all(localHistory.map(async (entry: any) => {
+            const encryptedNote = await encrypt(entry.note || '', derivedKey);
+            const encryptedTokens = entry.output_tokens !== null ? await encrypt(String(entry.output_tokens), derivedKey) : null;
+            return {
+                model: entry.model,
+                note: encryptedNote,
+                output_tokens: encryptedTokens,
+                timestamp: new Date(entry.timestamp).toISOString()
+            };
+        }));
+        
+        // Call the batch function once with the entire payload.
+        const { error: batchError } = await supabase.rpc('batch_add_prompts', {
             p_bucket_id: newKey,
-            p_model: entry.model,
-            p_note: encryptedNote,
-            p_output_tokens: encryptedTokens,
-            p_timestamp: new Date(entry.timestamp).toISOString(),
-          })
-        }
+            p_prompts_jsonb: encryptedHistoryBatch
+        });
+        if (batchError) throw batchError;
       }
       
       localStorage.setItem(SYNC_KEY_STORAGE, newKey);
@@ -455,9 +462,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 }
 
   const handleImportData = async (file: File) => {
-    if (isLocked) {
-      toast({ title: "Unlock required", description: "Please unlock the app to import data.", variant: "destructive" });
-      return;
+    if (isLocked && !syncKey) {
+        toast({ title: "Unlock required", description: "Please unlock the app to import data.", variant: "destructive" });
+        return;
     }
     setSyncing(true)
     try {
@@ -468,24 +475,36 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         }
         
         if (syncKey) {
-            if (!encryptionKey) throw new Error("App is locked.");
+            if (!encryptionKey) throw new Error("App is locked. Cannot import.");
+            
+            // Clear existing data and update models
             await supabase.rpc('delete_all_my_prompts', { p_bucket_id: syncKey })
             await supabase.rpc('update_my_models', { p_bucket_id: syncKey, p_new_models: importedData.models })
+            
             if (importedData.history.length > 0) {
-                for (const entry of importedData.history) {
-                    const encryptedNote = await encrypt(entry.note, encryptionKey);
+                // Encrypt all prompts on the client before sending
+                const encryptedHistoryBatch = await Promise.all(importedData.history.map(async (entry: any) => {
+                    const encryptedNote = await encrypt(entry.note || '', encryptionKey);
                     const encryptedTokens = entry.output_tokens !== null ? await encrypt(String(entry.output_tokens), encryptionKey) : null;
-                    await supabase.rpc('add_new_prompt', { 
-                        p_bucket_id: syncKey, 
-                        p_model: entry.model, 
-                        p_note: encryptedNote,
-                        p_output_tokens: encryptedTokens,
-                        p_timestamp: entry.timestamp
-                    });
-                }
+                    return {
+                        model: entry.model,
+                        note: encryptedNote,
+                        output_tokens: encryptedTokens,
+                        timestamp: new Date(entry.timestamp).toISOString()
+                    };
+                }));
+
+                // Call the new batch function
+                const { error: batchError } = await supabase.rpc('batch_add_prompts', {
+                    p_bucket_id: syncKey,
+                    p_prompts_jsonb: encryptedHistoryBatch
+                });
+                if (batchError) throw batchError;
             }
+            
             await broadcastChange('prompts_changed');
             await broadcastChange('models_changed');
+            
             await refreshDataFromSupabase(syncKey, encryptionKey)
 
         } else {
@@ -497,6 +516,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             })).sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()))
         }
     } catch (error: any) {
+        console.error("Import error:", error);
         throw new Error(error.message || 'An unknown error occurred during import.');
     } finally {
         setSyncing(false)
