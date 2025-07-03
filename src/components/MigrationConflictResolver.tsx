@@ -121,7 +121,7 @@ export function MigrationConflictResolver({ isOpen, onOpenChange, conflicts, onR
                           <Button variant="outline" size="sm" onClick={() => setEditingPrompt(prompt)}>
                             <Pencil className="mr-2 h-4 w-4" /> Edit to Fit
                           </Button>
-                          <DropdownMenu>
+                          <DropdownMenu modal={false}>
                             <DropdownMenuTrigger asChild>
                               <Button variant="secondary" size="sm">
                                 More Options <ChevronDown className="ml-2 h-4 w-4" />

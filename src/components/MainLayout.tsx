@@ -22,6 +22,7 @@ import { Separator } from './ui/separator'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle as CardTitleUI } from '@/components/ui/card'
 import { Input } from './ui/input'
 import { useToast } from '@/hooks/use-toast'
+import { ThemeToggle } from '@/components/ThemeToggle'
 
 
 const WELCOME_DISMISSED_KEY = 'promptlog_welcome_dismissed';
@@ -81,6 +82,7 @@ function MainContent({ children }: { children: React.ReactNode }) {
     )}>
       <header className="p-4 border-b flex items-center justify-between sticky top-0 bg-background/80 backdrop-blur-sm z-10">
         <SidebarTrigger />
+        <ThemeToggle />
       </header>
       
       <div className={cn(
@@ -217,7 +219,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
             </div>
           </SidebarContent>
           <SidebarFooter className="p-4 text-xs text-muted-foreground">
-            Version 1.6.14
+            Version 1.6.15
           </SidebarFooter>
         </Sidebar>
         
