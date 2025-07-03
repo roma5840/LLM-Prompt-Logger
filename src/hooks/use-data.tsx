@@ -567,6 +567,15 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         
         if (syncKey) {
             if (!encryptionKey) throw new Error("App is locked. Cannot import.");
+
+            // Validate note length before proceeding with import for synced accounts
+            const oversizedNote = importedData.history.find(
+              (p: any) => p.note && typeof p.note === 'string' && p.note.length > NOTE_CHAR_LIMIT
+            );
+
+            if (oversizedNote) {
+              throw new Error(`Import failed. A note in the file exceeds the ${NOTE_CHAR_LIMIT} character limit for synced accounts.`);
+            }
             
             // Clear existing data and update models
             await supabase.rpc('delete_all_my_prompts', { p_bucket_id: syncKey })

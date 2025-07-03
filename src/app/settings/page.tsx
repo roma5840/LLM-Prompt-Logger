@@ -51,6 +51,7 @@ export default function SettingsPage() {
   const [fileToImport, setFileToImport] = useState<File | null>(null)
   const [isMigrateDialogOpen, setIsMigrateDialogOpen] = useState(false)
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
+  const [isLinkConfirmationOpen, setIsLinkConfirmationOpen] = useState(false);
 
   // State for the new migration flow
   const [isResolverOpen, setResolverOpen] = useState(false);
@@ -194,12 +195,12 @@ export default function SettingsPage() {
       toast({ title: "Sync Canceled", description: "The cloud sync process was canceled." });
   };
 
-
-  const handleLinkDevice = async () => {
+  const executeLinkDevice = async () => {
     if (!manualSyncKey || !masterPassword) {
       toast({ title: "Missing Information", description: "Please provide both a Sync Key and your Master Password.", variant: "destructive" });
       return;
     }
+
     try {
       await data.linkDeviceWithKey(manualSyncKey, masterPassword)
       setLinkDeviceDialogOpen(false)
@@ -215,8 +216,22 @@ export default function SettingsPage() {
         description: error.message,
         variant: "destructive",
       })
+    } finally {
+      setIsLinkConfirmationOpen(false);
     }
   }
+  
+  const handleInitiateLinkDevice = () => {
+    if (!manualSyncKey || !masterPassword) {
+      toast({ title: "Missing Information", description: "Please provide both a Sync Key and your Master Password.", variant: "destructive" });
+      return;
+    }
+    if (!data.syncKey && data.history.length > 0) {
+        setIsLinkConfirmationOpen(true);
+    } else {
+        executeLinkDevice();
+    }
+  };
   
   const handleLinkWithQrCode = async (key: string) => {
       setManualSyncKey(key);
@@ -385,7 +400,7 @@ export default function SettingsPage() {
                           <AlertDialogHeader>
                             <AlertDialogTitle>Unlink this device?</AlertDialogTitle>
                             <AlertDialogDescription>
-                              This will remove the sync key and encryption key from this device and reset the app. Your encrypted data in the cloud will not be affected.
+                              This will remove the sync key and encryption key from this device and reset the app. Your encrypted data in the cloud will not be affected. Your local-only notes will be preserved.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
@@ -450,13 +465,13 @@ export default function SettingsPage() {
                                 placeholder="Enter your Master Password" 
                                 value={masterPassword}
                                 onChange={e => setMasterPassword(e.target.value)} 
-                                onKeyDown={e => e.key === 'Enter' && handleLinkDevice()}
+                                onKeyDown={e => e.key === 'Enter' && handleInitiateLinkDevice()}
                                 disabled={data.syncing} 
                             />
                           </div>
                           <DialogFooter className="gap-y-2 sm:gap-x-2 flex-col sm:flex-row pt-4">
                             <Button variant="secondary" onClick={() => startQrScanner(key => handleLinkWithQrCode(key))} disabled={data.syncing}>Scan QR</Button>
-                            <Button onClick={handleLinkDevice} disabled={data.syncing || !manualSyncKey || !masterPassword}>{data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Link & Decrypt</Button>
+                            <Button onClick={handleInitiateLinkDevice} disabled={data.syncing || !manualSyncKey || !masterPassword}>{data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Link & Decrypt</Button>
                           </DialogFooter>
                         </DialogContent>
                       </Dialog>
@@ -596,6 +611,20 @@ export default function SettingsPage() {
                 Import
             </AlertDialogAction>
           </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={isLinkConfirmationOpen} onOpenChange={setIsLinkConfirmationOpen}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Overwrite Local Data?</AlertDialogTitle>
+                <AlertDialogDescription>
+                    Linking this device will replace its current local data with the data from your cloud account. Any notes you've made on this device will be permanently deleted. Are you sure you want to continue?
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={executeLinkDevice}>Continue & Link</AlertDialogAction>
+            </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </MainLayout>
