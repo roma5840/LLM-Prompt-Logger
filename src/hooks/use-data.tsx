@@ -96,9 +96,6 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     localStorage.removeItem(ENCRYPTION_KEY_STORAGE);
     setEncryptionKey(null);
     setIsLocked(true);
-    setHistory([]);
-    setLocalOnlyHistory([]);
-    setModels(DEFAULT_MODELS);
   }, []);
 
   const unlinkDevice = useCallback((options?: { showToast?: boolean; title?: string; message?: string }) => {
@@ -229,7 +226,11 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
                 setIsLocked(false);
                 await loadDataFromSupabase(key, loadedKey);
             } else {
-                // No key found, app is locked
+                // No key found, app is locked.
+                const localOnlyData = localStorage.getItem(LOCAL_ONLY_HISTORY_STORAGE);
+                if (localOnlyData) {
+                    setLocalOnlyHistory(JSON.parse(localOnlyData).map((p: any) => ({...p, timestamp: new Date(p.timestamp)})));
+                }
                 setIsLocked(true);
                 setLoading(false);
             }
@@ -253,8 +254,10 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   }, [history, models, syncKey]);
 
   useEffect(() => {
-    localStorage.setItem(LOCAL_ONLY_HISTORY_STORAGE, JSON.stringify(localOnlyHistory));
-  }, [localOnlyHistory]);
+    if (!loading) {
+      localStorage.setItem(LOCAL_ONLY_HISTORY_STORAGE, JSON.stringify(localOnlyHistory));
+    }
+  }, [localOnlyHistory, loading]);
 
   const broadcastChange = async (event: string) => {
     if (!syncKey) return;
