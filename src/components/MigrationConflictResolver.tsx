@@ -4,7 +4,7 @@
 import { useState, useMemo, useCallback } from 'react'
 import { Prompt } from '@/lib/types'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, DialogClose } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle as CardTitleUI } from '@/components/ui/card'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -144,17 +144,15 @@ export function MigrationConflictResolver({ isOpen, onOpenChange, conflicts, onR
               </div>
             </ScrollArea>
           </div>
-          <DialogFooter className="p-6 pt-4 border-t bg-background sticky bottom-0">
-            <div className="w-full flex justify-between items-center">
-              <p className="text-sm text-muted-foreground">
-                {resolvedCount} of {conflicts.length} resolved.
-              </p>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={onCancel}>Cancel Sync</Button>
-                <Button onClick={handleComplete} disabled={!allResolved}>Complete Sync</Button>
-              </div>
+          <div className="mt-auto p-6 pt-4 border-t bg-background flex justify-between items-center">
+            <p className="text-sm text-muted-foreground">
+              {resolvedCount} of {conflicts.length} resolved.
+            </p>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={onCancel}>Cancel Sync</Button>
+              <Button onClick={handleComplete} disabled={!allResolved}>Complete Sync</Button>
             </div>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
       {editingPrompt && (
@@ -193,12 +191,12 @@ function EditConflictModal({ prompt, onSave, onClose }: { prompt: Prompt, onSave
             {content.length.toLocaleString()} / {NOTE_CHAR_LIMIT.toLocaleString()}
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={() => onSave(prompt.id, content)} disabled={!isUnderLimit}>
-            Save and Sync
-          </Button>
-        </DialogFooter>
+        <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+            <Button onClick={() => onSave(prompt.id, content)} disabled={!isUnderLimit}>
+                Save and Sync
+            </Button>
+        </div>
       </DialogContent>
     </Dialog>
   )
