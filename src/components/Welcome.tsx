@@ -3,7 +3,7 @@
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { BotMessageSquare, BarChart3, Smartphone, FileDown, ArrowRight } from 'lucide-react'
+import { BotMessageSquare, BarChart3, ShieldCheck, FileDown, ArrowRight } from 'lucide-react'
 
 interface WelcomeProps {
   onGetStarted: () => void
@@ -21,9 +21,9 @@ const features = [
     description: 'Visualize your prompt history with insightful charts. Understand which models you use most and track your activity over time.',
   },
   {
-    icon: <Smartphone className="h-8 w-8 text-primary" />,
-    title: 'Sync Across Devices',
-    description: 'Enable cloud sync to generate a secure Sync Key. Use it to link your other devices and keep your entire history in one place.',
+    icon: <ShieldCheck className="h-8 w-8 text-primary" />,
+    title: 'E2E Encrypted Sync',
+    description: 'Enable cloud sync with a Master Password. Your data is encrypted on your device and unreadable by anyone but you, keeping your history private and in sync.',
   },
   {
     icon: <FileDown className="h-8 w-8 text-primary" />,
