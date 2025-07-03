@@ -31,6 +31,7 @@ import QRCode from 'qrcode'
 import { Html5Qrcode } from 'html5-qrcode'
 import { Loader2, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Separator } from '@/components/ui/separator'
 
 const MODEL_NAME_MAX_LENGTH = 80;
 const MODEL_LIMIT = 10;
@@ -265,101 +266,127 @@ export default function SettingsPage() {
               <CardTitle>Sync & Data Management</CardTitle>
               <CardDescription>Enable cloud sync or manage your local data.</CardDescription>
             </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                {data.syncKey ? (
-                  <div className="space-y-2">
-                    <Dialog>
-                      <DialogTrigger asChild><Button className="w-full">Link Another Device</Button></DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader><DialogTitle>Scan QR Code</DialogTitle></DialogHeader>
-                        <div className="flex justify-center my-4"><canvas id="qr-code-canvas" ref={canvas => canvas && generateQrCode(data.syncKey!, canvas)}></canvas></div>
-                        <Input value={data.syncKey} readOnly />
-                      </DialogContent>
-                    </Dialog>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="outline" className="w-full">Unlink This Device</Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Unlink this device?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This will remove the sync key from this device and reset the app to its default state. Your data in the cloud will not be affected. You can link this device again later.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction className={buttonVariants({ variant: "destructive" })} onClick={handleUnlinkDevice}>
-                            Unlink Device
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <AlertDialog open={isMigrateDialogOpen} onOpenChange={(open) => !data.syncing && setIsMigrateDialogOpen(open)}>
-                      <AlertDialogTrigger asChild>
-                        <Button className="w-full" disabled={data.syncing}>
-                          {data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Enable Cloud Sync
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Enable Cloud Sync?</AlertDialogTitle>
-                        </AlertDialogHeader>
-                        <div className="space-y-4">
-                          <Alert>
-                            <AlertTriangle className="h-4 w-4" />
-                            <AlertTitle>Data Retention Policy</AlertTitle>
-                            <AlertDescription>
-                              To maintain service performance, prompts older than 90 days are automatically deleted from the cloud.
-                            </AlertDescription>
-                          </Alert>
-                          <AlertDialogDescription>
-                            This will upload your local data to a new, secure cloud account, allowing you to sync across devices. Are you sure you want to continue?
-                          </AlertDialogDescription>
-                        </div>
-                        <AlertDialogFooter className="pt-2">
-                          <AlertDialogCancel disabled={data.syncing}>Cancel</AlertDialogCancel>
-                          <Button onClick={handleMigrateToCloud} disabled={data.syncing}>
-                            {data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Enable Sync
+            <CardContent className="flex flex-col gap-6">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                <div>
+                  <h3 className="font-medium leading-none">
+                    {data.syncKey ? "Cloud Sync Enabled" : "Cloud Sync"}
+                  </h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {data.syncKey 
+                        ? "Link more devices or unlink this one." 
+                        : "Enable sync or link this device to an existing account."
+                    }
+                  </p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+                  {data.syncKey ? (
+                    <>
+                      <Dialog>
+                        <DialogTrigger asChild><Button>Link Another Device</Button></DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader><DialogTitle>Scan QR Code</DialogTitle></DialogHeader>
+                          <div className="flex justify-center my-4"><canvas id="qr-code-canvas" ref={canvas => canvas && generateQrCode(data.syncKey!, canvas)}></canvas></div>
+                          <Input value={data.syncKey} readOnly />
+                        </DialogContent>
+                      </Dialog>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="outline">Unlink This Device</Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Unlink this device?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This will remove the sync key from this device and reset the app to its default state. Your data in the cloud will not be affected. You can link this device again later.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction className={buttonVariants({ variant: "destructive" })} onClick={handleUnlinkDevice}>
+                              Unlink Device
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </>
+                  ) : (
+                    <>
+                      <AlertDialog open={isMigrateDialogOpen} onOpenChange={(open) => !data.syncing && setIsMigrateDialogOpen(open)}>
+                        <AlertDialogTrigger asChild>
+                          <Button disabled={data.syncing}>
+                            {data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Enable Cloud Sync
                           </Button>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                    <Dialog open={isLinkDeviceDialogOpen} onOpenChange={setLinkDeviceDialogOpen}>
-                      <DialogTrigger asChild><Button variant="outline" className="w-full">Link This Device</Button></DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader><DialogTitle>Scan or Enter Sync Key</DialogTitle></DialogHeader>
-                        <div className="space-y-4">
-                          <Alert>
-                            <AlertTriangle className="h-4 w-4" />
-                            <AlertTitle>Data Retention Policy</AlertTitle>
-                            <AlertDescription>
-                              By linking your device, you acknowledge that any synced prompts older than 90 days will be automatically deleted to maintain service performance.
-                            </AlertDescription>
-                          </Alert>
-                          <div id="qr-reader" className="my-2"></div>
-                          <Input placeholder="Enter sync key manually" value={manualSyncKey} onChange={e => setManualSyncKey(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLinkDevice(manualSyncKey)} disabled={data.syncing} />
-                        </div>
-                        <DialogFooter className="gap-y-2 sm:gap-x-2 flex-col sm:flex-row pt-4">
-                          <Button variant="secondary" onClick={() => startQrScanner(key => handleLinkDevice(key))} disabled={data.syncing}>Start Scanner</Button>
-                          <Button onClick={() => handleLinkDevice(manualSyncKey)} disabled={data.syncing || !manualSyncKey}>{data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Link</Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                  </div>
-                )}
-                <div className="space-y-2">
-                  <Button onClick={data.handleExportData} variant="outline" className="w-full">Export Data</Button>
-                  <div className="flex w-full items-center space-x-2">
-                    <Input id="import-file-input" type="file" accept=".json" onChange={e => setFileToImport(e.target.files ? e.target.files[0] : null)} className="w-full" />
-                  </div>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Enable Cloud Sync?</AlertDialogTitle>
+                          </AlertDialogHeader>
+                          <div className="space-y-4">
+                            <Alert>
+                              <AlertTriangle className="h-4 w-4" />
+                              <AlertTitle>Data Retention Policy</AlertTitle>
+                              <AlertDescription>
+                                To maintain service performance, prompts older than 90 days are automatically deleted from the cloud.
+                              </AlertDescription>
+                            </Alert>
+                            <AlertDialogDescription>
+                              This will upload your local data to a new, secure cloud account, allowing you to sync across devices. Are you sure you want to continue?
+                            </AlertDialogDescription>
+                          </div>
+                          <AlertDialogFooter className="pt-2">
+                            <AlertDialogCancel disabled={data.syncing}>Cancel</AlertDialogCancel>
+                            <Button onClick={handleMigrateToCloud} disabled={data.syncing}>
+                              {data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Enable Sync
+                            </Button>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                      <Dialog open={isLinkDeviceDialogOpen} onOpenChange={setLinkDeviceDialogOpen}>
+                        <DialogTrigger asChild><Button variant="outline">Link This Device</Button></DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader><DialogTitle>Scan or Enter Sync Key</DialogTitle></DialogHeader>
+                          <div className="space-y-4">
+                            <Alert>
+                              <AlertTriangle className="h-4 w-4" />
+                              <AlertTitle>Data Retention Policy</AlertTitle>
+                              <AlertDescription>
+                                By linking your device, you acknowledge that any synced prompts older than 90 days will be automatically deleted to maintain service performance.
+                              </AlertDescription>
+                            </Alert>
+                            <div id="qr-reader" className="my-2"></div>
+                            <Input placeholder="Enter sync key manually" value={manualSyncKey} onChange={e => setManualSyncKey(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLinkDevice(manualSyncKey)} disabled={data.syncing} />
+                          </div>
+                          <DialogFooter className="gap-y-2 sm:gap-x-2 flex-col sm:flex-row pt-4">
+                            <Button variant="secondary" onClick={() => startQrScanner(key => handleLinkDevice(key))} disabled={data.syncing}>Start Scanner</Button>
+                            <Button onClick={() => handleLinkDevice(manualSyncKey)} disabled={data.syncing || !manualSyncKey}>{data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Link</Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </>
+                  )}
                 </div>
               </div>
 
+              <Separator />
+
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                <div>
+                  <h3 className="font-medium leading-none">Data Portability</h3>
+                  <p className="text-sm text-muted-foreground mt-1">Export your data or import from a backup file.</p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+                  <Button onClick={data.handleExportData} variant="outline">Export Data</Button>
+                  <Input
+                    id="import-file-input"
+                    type="file"
+                    accept=".json"
+                    onChange={e => setFileToImport(e.target.files ? e.target.files[0] : null)}
+                    className="sm:max-w-xs"
+                  />
+                </div>
+              </div>
+              
               {data.syncKey && data.history.length > 0 && (
                 <div className="text-xs text-center text-muted-foreground p-2 border rounded-md bg-muted/50">
                   <p>Estimated Cloud Storage: <span className="font-semibold">{formattedSize}</span></p>
