@@ -3,8 +3,8 @@
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
-// Function to derive a key from a password and salt using PBKDF2
-export async function deriveKey(password: string, salt: string): Promise<CryptoKey> {
+// Function to derive a key from a password and salt using PBKDF2 for encryption
+export async function deriveEncryptionKey(password: string, salt: string): Promise<CryptoKey> {
   const passwordBuffer = textEncoder.encode(password);
   const saltBuffer = textEncoder.encode(salt);
 
@@ -29,6 +29,41 @@ export async function deriveKey(password: string, salt: string): Promise<CryptoK
     ['encrypt', 'decrypt']
   );
 }
+
+// Function to derive a deterministic access token from a password and salt
+export async function getAccessToken(password: string, salt: string): Promise<string> {
+  const accessTokenSalt = salt + '::promptlog-access-token';
+  const passwordBuffer = textEncoder.encode(password);
+  const saltBuffer = textEncoder.encode(accessTokenSalt);
+
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    passwordBuffer,
+    { name: 'PBKDF2' },
+    false,
+    ['deriveKey']
+  );
+
+  // Derive a 256-bit key
+  const derivedKey = await crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt: saltBuffer,
+      iterations: 100000,
+      hash: 'SHA-256',
+    },
+    keyMaterial,
+    { name: 'HMAC', hash: 'SHA-256', length: 256 },
+    true,
+    ['sign']
+  );
+
+  // Export the key as raw bytes and convert to a hex string to serve as the token
+  const keyBytes = await crypto.subtle.exportKey('raw', derivedKey);
+  const hashArray = Array.from(new Uint8Array(keyBytes));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 
 // Function to encrypt data using AES-GCM
 export async function encrypt(data: string, key: CryptoKey): Promise<string> {

@@ -3,16 +3,15 @@
 
 import { useState, useEffect, useCallback, createContext, useContext, ReactNode, useMemo, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
-import { DEFAULT_MODELS, LOCAL_HISTORY_STORAGE, LOCAL_MODELS_STORAGE, SYNC_KEY_STORAGE, ENCRYPTION_KEY_STORAGE, SALT_STORAGE, NOTE_CHAR_LIMIT, LOCAL_ONLY_HISTORY_STORAGE, ACCESS_TOKEN_STORAGE } from '@/lib/constants'
+import { DEFAULT_MODELS, LOCAL_HISTORY_STORAGE, LOCAL_MODELS_STORAGE, SYNC_KEY_STORAGE, SALT_STORAGE, NOTE_CHAR_LIMIT, LOCAL_ONLY_HISTORY_STORAGE, SESSION_MASTER_PASSWORD_STORAGE } from '@/lib/constants'
 import { Prompt, Model } from '@/lib/types'
 import { useToast } from './use-toast'
-import { deriveKey, encrypt, decrypt } from '@/lib/crypto'
+import { deriveEncryptionKey, getAccessToken, encrypt, decrypt } from '@/lib/crypto'
 
 interface DataContextType {
   history: Prompt[];
   models: Model[];
   syncKey: string | null;
-  accessToken: string | null;
   loading: boolean;
   syncing: boolean;
   isLocked: boolean;
@@ -48,12 +47,6 @@ export const useData = (): DataContextType => {
 const VERIFICATION_STRING = 'PROMPT_LOG_OK';
 
 // --- HELPER FUNCTIONS ---
-const generateAccessToken = (): string => {
-  const array = new Uint32Array(8);
-  window.crypto.getRandomValues(array);
-  return Array.from(array, dec => ('0' + dec.toString(16)).slice(-8)).join('');
-};
-
 const hashAccessToken = async (token: string): Promise<string> => {
   const encoder = new TextEncoder();
   const data = encoder.encode(token);
@@ -62,43 +55,15 @@ const hashAccessToken = async (token: string): Promise<string> => {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 };
 
-const saveKeyToLocalStorage = async (key: CryptoKey) => {
-    try {
-        const jwk = await window.crypto.subtle.exportKey('jwk', key);
-        localStorage.setItem(ENCRYPTION_KEY_STORAGE, JSON.stringify(jwk));
-    } catch (e) {
-        console.error("Failed to save key", e);
-    }
-};
-
-const loadKeyFromLocalStorage = async (): Promise<CryptoKey | null> => {
-    const jwkString = localStorage.getItem(ENCRYPTION_KEY_STORAGE);
-    if (!jwkString) return null;
-    try {
-        const jwk = JSON.parse(jwkString);
-        return await window.crypto.subtle.importKey(
-            'jwk',
-            jwk,
-            { name: 'AES-GCM' },
-            true,
-            ['encrypt', 'decrypt']
-        );
-    } catch (e) {
-        console.error("Failed to load key, clearing invalid key.", e);
-        localStorage.removeItem(ENCRYPTION_KEY_STORAGE);
-        return null;
-    }
-};
-
 export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [history, setHistory] = useState<Prompt[]>([])
   const [localOnlyHistory, setLocalOnlyHistory] = useState<Prompt[]>([]);
   const [models, setModels] = useState<Model[]>(DEFAULT_MODELS)
   const [syncKey, setSyncKey] = useState<string | null>(null)
-  const [accessToken, setAccessToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [encryptionKey, setEncryptionKey] = useState<CryptoKey | null>(null);
+  const [masterPassword, setMasterPassword] = useState<string | null>(null);
   const [isLocked, setIsLocked] = useState(false);
   const { toast } = useToast();
 
@@ -119,8 +84,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   }, [history, localOnlyHistory]);
 
   const lock = useCallback(() => {
-    localStorage.removeItem(ENCRYPTION_KEY_STORAGE);
+    sessionStorage.removeItem(SESSION_MASTER_PASSWORD_STORAGE);
     setEncryptionKey(null);
+    setMasterPassword(null);
     setIsLocked(true);
   }, []);
 
@@ -131,17 +97,16 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     });
     const preservedModels = modelsRef.current;
 
+    sessionStorage.removeItem(SESSION_MASTER_PASSWORD_STORAGE);
     localStorage.removeItem(SYNC_KEY_STORAGE);
-    localStorage.removeItem(ACCESS_TOKEN_STORAGE);
     localStorage.removeItem(SALT_STORAGE);
-    localStorage.removeItem(ENCRYPTION_KEY_STORAGE);
     localStorage.removeItem(LOCAL_ONLY_HISTORY_STORAGE);
     localStorage.removeItem(LOCAL_HISTORY_STORAGE);
     localStorage.removeItem(LOCAL_MODELS_STORAGE);
 
     setSyncKey(null);
-    setAccessToken(null);
     setEncryptionKey(null);
+    setMasterPassword(null);
     setIsLocked(false);
 
     setHistory(preservedHistory);
@@ -222,11 +187,10 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     try {
         const key = localStorage.getItem(SYNC_KEY_STORAGE);
         const salt = localStorage.getItem(SALT_STORAGE);
-        const token = localStorage.getItem(ACCESS_TOKEN_STORAGE);
-        if (!key || !salt || !token) {
-            throw new Error("Cannot unlock, sync key, salt, or access token not found on device.");
+        if (!key || !salt) {
+            throw new Error("Cannot unlock, sync key or salt not found on device.");
         }
-        const derivedKey = await deriveKey(password, salt);
+        const derivedKey = await deriveEncryptionKey(password, salt);
 
         const { data: bucketData, error: bucketError } = await supabase.rpc('get_my_bucket_data', { p_bucket_id: key });
         if (bucketError || !bucketData || bucketData.length === 0) throw new Error("Could not find account data to verify password.");
@@ -240,9 +204,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             throw new Error("Invalid master password.");
         }
 
-        await saveKeyToLocalStorage(derivedKey);
+        sessionStorage.setItem(SESSION_MASTER_PASSWORD_STORAGE, password);
         setEncryptionKey(derivedKey);
-        setAccessToken(token);
+        setMasterPassword(password);
         setIsLocked(false);
         await loadDataFromSupabase(key, derivedKey);
     } catch (err) {
@@ -255,24 +219,22 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const initialize = async () => {
         const key = localStorage.getItem(SYNC_KEY_STORAGE);
-        const token = localStorage.getItem(ACCESS_TOKEN_STORAGE);
-        if (key && token) {
+        if (key) {
             setSyncKey(key);
-            setAccessToken(token);
-            const loadedKey = await loadKeyFromLocalStorage();
-            if (loadedKey) {
-                // Key found, app is unlocked
-                setEncryptionKey(loadedKey);
-                setIsLocked(false);
-                await loadDataFromSupabase(key, loadedKey);
+            const sessionPassword = sessionStorage.getItem(SESSION_MASTER_PASSWORD_STORAGE);
+            if (sessionPassword) {
+                // Session is active, try to unlock automatically
+                await unlock(sessionPassword).catch(err => {
+                    console.error("Session unlock failed, locking app.", err);
+                    lock(); // Lock if session password becomes invalid
+                });
             } else {
-                // No key found, app is locked.
+                // No session, app is locked
                 const localOnlyData = localStorage.getItem(LOCAL_ONLY_HISTORY_STORAGE);
                 if (localOnlyData) {
                     setLocalOnlyHistory(JSON.parse(localOnlyData).map((p: any) => ({...p, timestamp: new Date(p.timestamp)})));
                 }
                 setIsLocked(true);
-                setLoading(false);
             }
         } else {
             // Load local, unencrypted data
@@ -280,11 +242,12 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             const localModels = localStorage.getItem(LOCAL_MODELS_STORAGE);
             if (localHistory) setHistory(JSON.parse(localHistory).map((e: any) => ({...e, timestamp: new Date(e.timestamp)})));
             if (localModels) setModels(JSON.parse(localModels));
-            setLoading(false);
         }
+        setLoading(false);
     };
     initialize();
-  }, [loadDataFromSupabase]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!syncKey) {
@@ -332,7 +295,12 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   const addPrompt = async (model: string, note: string, outputTokens: number | null) => {
     if (syncKey) {
-      if (!encryptionKey || !accessToken) throw new Error("App is locked. Cannot add prompt.");
+      if (!encryptionKey || !masterPassword) throw new Error("App is locked. Cannot add prompt.");
+      
+      const salt = localStorage.getItem(SALT_STORAGE);
+      if (!salt) throw new Error("Salt not found, cannot create access token.");
+      const token = await getAccessToken(masterPassword, salt);
+      
       const encryptedNote = await encrypt(note, encryptionKey);
       const encryptedTokens = outputTokens !== null ? await encrypt(String(outputTokens), encryptionKey) : null;
       
@@ -344,7 +312,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
           p_model: model, 
           p_note: encryptedNote, 
           p_output_tokens: encryptedTokens,
-          p_access_token: accessToken
+          p_access_token: token
       })
       if (error) {
         setHistory(prev => prev.filter(p => p.id !== optimisticPrompt.id))
@@ -368,7 +336,12 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     } else {
       setHistory(prev => prev.map(p => p.id === promptId ? { ...p, note: newNote, output_tokens: newOutputTokens } : p));
       if (syncKey) {
-        if (!encryptionKey || !accessToken) throw new Error("App is locked. Cannot update prompt.");
+        if (!encryptionKey || !masterPassword) throw new Error("App is locked. Cannot update prompt.");
+        
+        const salt = localStorage.getItem(SALT_STORAGE);
+        if (!salt) throw new Error("Salt not found, cannot create access token.");
+        const token = await getAccessToken(masterPassword, salt);
+
         const encryptedNote = await encrypt(newNote, encryptionKey);
         const encryptedTokens = newOutputTokens !== null ? await encrypt(String(newOutputTokens), encryptionKey) : null;
 
@@ -377,7 +350,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
           p_bucket_id: syncKey, 
           p_new_note: encryptedNote,
           p_new_output_tokens: encryptedTokens,
-          p_access_token: accessToken
+          p_access_token: token
         })
         if (error) {
           refreshDataFromSupabase(syncKey, encryptionKey) // Revert
@@ -398,11 +371,16 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         const originalHistory = history
         setHistory(prev => prev.filter(p => p.id !== promptId))
         if (syncKey) {
-          if (!encryptionKey || !accessToken) throw new Error("App is locked. Cannot delete prompt.");
+          if (!encryptionKey || !masterPassword) throw new Error("App is locked. Cannot delete prompt.");
+          
+          const salt = localStorage.getItem(SALT_STORAGE);
+          if (!salt) throw new Error("Salt not found, cannot create access token.");
+          const token = await getAccessToken(masterPassword, salt);
+
           const { error } = await supabase.rpc('delete_my_prompt', { 
               p_prompt_id: promptId, 
               p_bucket_id: syncKey,
-              p_access_token: accessToken
+              p_access_token: token
           })
           if (error) {
             setHistory(originalHistory)
@@ -415,12 +393,17 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   const deleteAllPrompts = async () => {
     if (syncKey) {
-      if (!encryptionKey || !accessToken) throw new Error("App is locked. Cannot delete prompts.");
+      if (!encryptionKey || !masterPassword) throw new Error("App is locked. Cannot delete prompts.");
+
+      const salt = localStorage.getItem(SALT_STORAGE);
+      if (!salt) throw new Error("Salt not found, cannot create access token.");
+      const token = await getAccessToken(masterPassword, salt);
+      
       const originalHistory = history;
       setHistory([]);
       const { error } = await supabase.rpc('delete_all_my_prompts', { 
           p_bucket_id: syncKey,
-          p_access_token: accessToken
+          p_access_token: token
       })
       if (error) {
         setHistory(originalHistory);
@@ -437,11 +420,16 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     const originalModels = models
     setModels(newModels)
     if (syncKey) {
-      if (!encryptionKey || !accessToken) throw new Error("App is locked. Cannot update models.");
+      if (!encryptionKey || !masterPassword) throw new Error("App is locked. Cannot update models.");
+      
+      const salt = localStorage.getItem(SALT_STORAGE);
+      if (!salt) throw new Error("Salt not found, cannot create access token.");
+      const token = await getAccessToken(masterPassword, salt);
+
       const { error } = await supabase.rpc('update_my_models', { 
           p_bucket_id: syncKey, 
           p_new_models: newModels,
-          p_access_token: accessToken
+          p_access_token: token
       })
       if (error) {
         setModels(originalModels)
@@ -462,10 +450,10 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     setSyncing(true)
     try {
       const salt = window.btoa(String.fromCharCode.apply(null, Array.from(window.crypto.getRandomValues(new Uint8Array(16)))));
-      const derivedKey = await deriveKey(password, salt);
+      const derivedKey = await deriveEncryptionKey(password, salt);
       const verificationHash = await encrypt(VERIFICATION_STRING, derivedKey);
       
-      const newAccessToken = generateAccessToken();
+      const newAccessToken = await getAccessToken(password, salt);
       const accessTokenHash = await hashAccessToken(newAccessToken);
 
       const localModels = JSON.parse(localStorage.getItem(LOCAL_MODELS_STORAGE) || JSON.stringify(DEFAULT_MODELS));
@@ -503,17 +491,16 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       const finalLocalNotes = notesToKeepLocal.map(p => ({ ...p, is_local_only: true }));
       setLocalOnlyHistory(finalLocalNotes);
 
-      await saveKeyToLocalStorage(derivedKey);
       localStorage.setItem(SYNC_KEY_STORAGE, newKey);
-      localStorage.setItem(ACCESS_TOKEN_STORAGE, newAccessToken);
       localStorage.setItem(SALT_STORAGE, salt);
       localStorage.setItem(LOCAL_ONLY_HISTORY_STORAGE, JSON.stringify(finalLocalNotes));
+      sessionStorage.setItem(SESSION_MASTER_PASSWORD_STORAGE, password);
       localStorage.removeItem(LOCAL_HISTORY_STORAGE);
       localStorage.removeItem(LOCAL_MODELS_STORAGE);
       
       setSyncKey(newKey);
-      setAccessToken(newAccessToken);
       setEncryptionKey(derivedKey);
+      setMasterPassword(password);
       setIsLocked(false);
       setHistory([]); // Will be populated by refreshData
       await refreshDataFromSupabase(newKey, derivedKey);
@@ -523,9 +510,8 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     }
   }
 
-  const linkDeviceWithKey = async (fullSyncKey: string, password: string) => {
-    const [key, token] = fullSyncKey.split(':');
-    if (!key || !token || key.length < 36) {
+  const linkDeviceWithKey = async (key: string, password: string) => {
+    if (!key || key.length < 36) {
         throw new Error('Invalid Sync Key format.')
     }
     setSyncing(true)
@@ -538,7 +524,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         const verificationHash = bucket.verification_hash;
         if (!salt || !verificationHash) throw new Error('Account is not E2EE enabled or is corrupted.');
         
-        const derivedKey = await deriveKey(password, salt);
+        const derivedKey = await deriveEncryptionKey(password, salt);
         try {
             const decrypted = await decrypt(verificationHash, derivedKey);
             if (decrypted !== VERIFICATION_STRING) throw new Error("Decryption test failed.");
@@ -546,16 +532,15 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             throw new Error("Invalid master password.");
         }
 
-        await saveKeyToLocalStorage(derivedKey);
         localStorage.setItem(SYNC_KEY_STORAGE, key)
-        localStorage.setItem(ACCESS_TOKEN_STORAGE, token);
         localStorage.setItem(SALT_STORAGE, salt);
+        sessionStorage.setItem(SESSION_MASTER_PASSWORD_STORAGE, password);
         localStorage.removeItem(LOCAL_HISTORY_STORAGE)
         localStorage.removeItem(LOCAL_MODELS_STORAGE)
         
         setSyncKey(key);
-        setAccessToken(token);
         setEncryptionKey(derivedKey);
+        setMasterPassword(password);
         setIsLocked(false);
         await refreshDataFromSupabase(key, derivedKey);
 
@@ -565,13 +550,18 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   }
 
   const deleteAccount = async () => {
-    if (!syncKey || !accessToken) return;
+    if (!syncKey || !masterPassword) return;
     setSyncing(true)
     try {
       await broadcastChange('account_deleted');
+
+      const salt = localStorage.getItem(SALT_STORAGE);
+      if (!salt) throw new Error("Salt not found, cannot create access token.");
+      const token = await getAccessToken(masterPassword, salt);
+      
       const { error } = await supabase.rpc('delete_my_account', { 
           p_bucket_id: syncKey,
-          p_access_token: accessToken
+          p_access_token: token
       })
       if (error) {
         throw new Error('Could not delete account. Please try again.');
@@ -619,7 +609,11 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         }
         
         if (syncKey) {
-            if (!encryptionKey || !accessToken) throw new Error("App is locked. Cannot import.");
+            if (!encryptionKey || !masterPassword) throw new Error("App is locked. Cannot import.");
+            
+            const salt = localStorage.getItem(SALT_STORAGE);
+            if (!salt) throw new Error("Salt not found, cannot create access token.");
+            const token = await getAccessToken(masterPassword, salt);
 
             const oversizedNote = importedData.history.find(
               (p: any) => p.note && typeof p.note === 'string' && p.note.length > NOTE_CHAR_LIMIT
@@ -629,8 +623,8 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
               throw new Error(`Import failed. A note in the file exceeds the ${NOTE_CHAR_LIMIT} character limit for synced accounts.`);
             }
             
-            await supabase.rpc('delete_all_my_prompts', { p_bucket_id: syncKey, p_access_token: accessToken })
-            await supabase.rpc('update_my_models', { p_bucket_id: syncKey, p_new_models: importedData.models, p_access_token: accessToken })
+            await supabase.rpc('delete_all_my_prompts', { p_bucket_id: syncKey, p_access_token: token })
+            await supabase.rpc('update_my_models', { p_bucket_id: syncKey, p_new_models: importedData.models, p_access_token: token })
             
             if (importedData.history.length > 0) {
                 const encryptedHistoryBatch = await Promise.all(importedData.history.map(async (entry: any) => {
@@ -647,7 +641,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
                 const { error: batchError } = await supabase.rpc('batch_add_prompts', {
                     p_bucket_id: syncKey,
                     p_prompts_jsonb: encryptedHistoryBatch,
-                    p_access_token: accessToken
+                    p_access_token: token
                 });
                 if (batchError) throw batchError;
             }
@@ -677,7 +671,6 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     history: mergedHistory,
     models,
     syncKey,
-    accessToken,
     loading,
     syncing,
     isLocked,

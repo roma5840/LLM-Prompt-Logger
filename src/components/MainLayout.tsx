@@ -219,7 +219,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
             </div>
           </SidebarContent>
           <SidebarFooter className="p-4 text-xs text-muted-foreground">
-            Version 1.6.25
+            Version 1.6.30
           </SidebarFooter>
         </Sidebar>
         
