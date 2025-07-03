@@ -43,6 +43,7 @@ export default function SettingsPage() {
   const [manualSyncKey, setManualSyncKey] = useState('')
   const [isLinkDeviceDialogOpen, setLinkDeviceDialogOpen] = useState(false)
   const [fileToImport, setFileToImport] = useState<File | null>(null)
+  const [isMigrateDialogOpen, setIsMigrateDialogOpen] = useState(false)
 
   const isModelLimitReached = data.models.length >= MODEL_LIMIT;
 
@@ -120,6 +121,7 @@ export default function SettingsPage() {
         title: "Success!",
         description: "Cloud sync has been enabled.",
       })
+      setIsMigrateDialogOpen(false)
     } catch (error: any) {
       toast({
         title: "Error",
@@ -297,8 +299,12 @@ export default function SettingsPage() {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild><Button className="w-full" disabled={data.syncing}>{data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Enable Cloud Sync</Button></AlertDialogTrigger>
+                    <AlertDialog open={isMigrateDialogOpen} onOpenChange={(open) => !data.syncing && setIsMigrateDialogOpen(open)}>
+                      <AlertDialogTrigger asChild>
+                        <Button className="w-full" disabled={data.syncing}>
+                          {data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Enable Cloud Sync
+                        </Button>
+                      </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
                           <AlertDialogTitle>Enable Cloud Sync?</AlertDialogTitle>
@@ -316,8 +322,10 @@ export default function SettingsPage() {
                           </AlertDialogDescription>
                         </div>
                         <AlertDialogFooter className="pt-2">
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={handleMigrateToCloud} disabled={data.syncing}>{data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Enable Sync</AlertDialogAction>
+                          <AlertDialogCancel disabled={data.syncing}>Cancel</AlertDialogCancel>
+                          <Button onClick={handleMigrateToCloud} disabled={data.syncing}>
+                            {data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Enable Sync
+                          </Button>
                         </AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>
