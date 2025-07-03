@@ -44,6 +44,35 @@ export const useData = (): DataContextType => {
 
 const VERIFICATION_STRING = 'PROMPT_LOG_OK';
 
+// --- HELPER FUNCTIONS FOR KEY STORAGE ---
+const saveKeyToLocalStorage = async (key: CryptoKey) => {
+    try {
+        const jwk = await window.crypto.subtle.exportKey('jwk', key);
+        localStorage.setItem(ENCRYPTION_KEY_STORAGE, JSON.stringify(jwk));
+    } catch (e) {
+        console.error("Failed to save key", e);
+    }
+};
+
+const loadKeyFromLocalStorage = async (): Promise<CryptoKey | null> => {
+    const jwkString = localStorage.getItem(ENCRYPTION_KEY_STORAGE);
+    if (!jwkString) return null;
+    try {
+        const jwk = JSON.parse(jwkString);
+        return await window.crypto.subtle.importKey(
+            'jwk',
+            jwk,
+            { name: 'AES-GCM' },
+            true,
+            ['encrypt', 'decrypt']
+        );
+    } catch (e) {
+        console.error("Failed to load key, clearing invalid key.", e);
+        localStorage.removeItem(ENCRYPTION_KEY_STORAGE);
+        return null;
+    }
+};
+
 export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [history, setHistory] = useState<Prompt[]>([])
   const [models, setModels] = useState<Model[]>(DEFAULT_MODELS)
@@ -55,7 +84,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const { toast } = useToast();
 
   const lock = useCallback(() => {
-    sessionStorage.removeItem(ENCRYPTION_KEY_STORAGE);
+    localStorage.removeItem(ENCRYPTION_KEY_STORAGE);
     setEncryptionKey(null);
     setIsLocked(true);
     setHistory([]);
@@ -65,7 +94,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const unlinkDevice = useCallback((options?: { showToast?: boolean; title?: string; message?: string }) => {
     localStorage.removeItem(SYNC_KEY_STORAGE);
     localStorage.removeItem(SALT_STORAGE);
-    sessionStorage.removeItem(ENCRYPTION_KEY_STORAGE);
+    localStorage.removeItem(ENCRYPTION_KEY_STORAGE);
     localStorage.removeItem(LOCAL_HISTORY_STORAGE);
     localStorage.removeItem(LOCAL_MODELS_STORAGE);
     
@@ -148,28 +177,19 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         }
         const derivedKey = await deriveKey(password, salt);
 
-        // --- VERIFICATION STEP ---
         const { data: bucketData, error: bucketError } = await supabase.rpc('get_my_bucket_data', { p_bucket_id: key });
-
-        if (bucketError || !bucketData || bucketData.length === 0) {
-            throw new Error("Could not find account data to verify password.");
-        }
-        
+        if (bucketError || !bucketData || bucketData.length === 0) throw new Error("Could not find account data to verify password.");
         const verificationHash = bucketData[0].verification_hash;
-        if (!verificationHash) {
-            throw new Error("Account is corrupted. Cannot verify password.");
-        }
+        if (!verificationHash) throw new Error("Account is corrupted. Cannot verify password.");
 
         try {
             const decrypted = await decrypt(verificationHash, derivedKey);
-            if (decrypted !== VERIFICATION_STRING) {
-                throw new Error("Decryption test failed.");
-            }
+            if (decrypted !== VERIFICATION_STRING) throw new Error("Decryption test failed.");
         } catch (e) {
             throw new Error("Invalid master password.");
         }
-        // --- END VERIFICATION STEP ---
 
+        await saveKeyToLocalStorage(derivedKey);
         setEncryptionKey(derivedKey);
         setIsLocked(false);
         await loadDataFromSupabase(key, derivedKey);
@@ -181,21 +201,32 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   }, [loadDataFromSupabase]);
 
   useEffect(() => {
-    const key = localStorage.getItem(SYNC_KEY_STORAGE);
-    if (key) {
-      setSyncKey(key);
-      // App is synced but locked until key is derived.
-      setIsLocked(true);
-      setLoading(false);
-    } else {
-      // Load local, unencrypted data
-      const localHistory = localStorage.getItem(LOCAL_HISTORY_STORAGE);
-      const localModels = localStorage.getItem(LOCAL_MODELS_STORAGE);
-      if (localHistory) setHistory(JSON.parse(localHistory).map((e: any) => ({...e, timestamp: new Date(e.timestamp)})));
-      if (localModels) setModels(JSON.parse(localModels));
-      setLoading(false);
-    }
-  }, []);
+    const initialize = async () => {
+        const key = localStorage.getItem(SYNC_KEY_STORAGE);
+        if (key) {
+            setSyncKey(key);
+            const loadedKey = await loadKeyFromLocalStorage();
+            if (loadedKey) {
+                // Key found, app is unlocked
+                setEncryptionKey(loadedKey);
+                setIsLocked(false);
+                await loadDataFromSupabase(key, loadedKey);
+            } else {
+                // No key found, app is locked
+                setIsLocked(true);
+                setLoading(false);
+            }
+        } else {
+            // Load local, unencrypted data
+            const localHistory = localStorage.getItem(LOCAL_HISTORY_STORAGE);
+            const localModels = localStorage.getItem(LOCAL_MODELS_STORAGE);
+            if (localHistory) setHistory(JSON.parse(localHistory).map((e: any) => ({...e, timestamp: new Date(e.timestamp)})));
+            if (localModels) setModels(JSON.parse(localModels));
+            setLoading(false);
+        }
+    };
+    initialize();
+  }, [loadDataFromSupabase]);
 
   useEffect(() => {
     if (!syncKey) {
@@ -341,7 +372,6 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       }
 
       if (localHistory.length > 0) {
-        // Use Promise.all to encrypt all prompts in parallel for performance.
         const encryptedHistoryBatch = await Promise.all(localHistory.map(async (entry: any) => {
             const encryptedNote = await encrypt(entry.note || '', derivedKey);
             const encryptedTokens = entry.output_tokens !== null ? await encrypt(String(entry.output_tokens), derivedKey) : null;
@@ -353,7 +383,6 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             };
         }));
         
-        // Call the batch function once with the entire payload.
         const { error: batchError } = await supabase.rpc('batch_add_prompts', {
             p_bucket_id: newKey,
             p_prompts_jsonb: encryptedHistoryBatch
@@ -361,6 +390,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         if (batchError) throw batchError;
       }
       
+      await saveKeyToLocalStorage(derivedKey);
       localStorage.setItem(SYNC_KEY_STORAGE, newKey);
       localStorage.setItem(SALT_STORAGE, salt);
       localStorage.removeItem(LOCAL_HISTORY_STORAGE);
@@ -382,32 +412,23 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     }
     setSyncing(true)
     try {
-        // Fetch data from the server first. Do not touch local state yet.
         const { data, error } = await supabase.rpc('get_my_bucket_data', { p_bucket_id: key })
-        if (error || !data || data.length === 0) {
-            throw new Error('Sync Key not found.')
-        }
+        if (error || !data || data.length === 0) throw new Error('Sync Key not found.')
 
         const bucket = data[0];
         const salt = bucket.salt;
         const verificationHash = bucket.verification_hash;
-
-        if (!salt || !verificationHash) {
-            throw new Error('Account is not E2EE enabled or is corrupted.');
-        }
+        if (!salt || !verificationHash) throw new Error('Account is not E2EE enabled or is corrupted.');
         
-        // Perform all cryptographic operations.
         const derivedKey = await deriveKey(password, salt);
         try {
             const decrypted = await decrypt(verificationHash, derivedKey);
-            if (decrypted !== VERIFICATION_STRING) {
-                throw new Error("Decryption test failed.");
-            }
+            if (decrypted !== VERIFICATION_STRING) throw new Error("Decryption test failed.");
         } catch (e) {
             throw new Error("Invalid master password.");
         }
 
-        // If all checks pass, commit changes to localStorage and React state.
+        await saveKeyToLocalStorage(derivedKey);
         localStorage.setItem(SYNC_KEY_STORAGE, key)
         localStorage.setItem(SALT_STORAGE, salt);
         localStorage.removeItem(LOCAL_HISTORY_STORAGE)

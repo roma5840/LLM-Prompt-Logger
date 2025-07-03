@@ -1,7 +1,7 @@
 <div align="center">
   <img src="./public/favicon.svg" alt="PromptLog Logo" width="80">
   <h1>PromptLog</h1>
-  <p>A sleek, local-first, and sync-enabled tool for logging and analyzing your LLM prompts.</p>
+  <p>A sleek, local-first, privacy-focused, and E2EE sync-enabled tool for logging and analyzing your LLM prompts.</p>
 </div>
 
 <div align="center">
@@ -13,18 +13,18 @@
 
 ## About
 
-**PromptLog** is a modern web application designed to help developers, researchers, and AI enthusiasts track and analyze their interactions with Large Language Models (LLMs). It starts as a completely private, browser-based tool and offers a seamless one-click migration to a secure cloud backend for data synchronization across multiple devices.
+**PromptLog** is a modern web application designed to help developers, researchers, and AI enthusiasts track and analyze their interactions with Large Language Models (LLMs). It starts as a completely private, browser-based tool and offers a seamless one-click migration to a secure, **end-to-end encrypted** cloud backend for real-time data synchronization across multiple devices.
 
-Whether you're fine-tuning prompts, comparing model outputs, or simply keeping a record of your AI conversations, PromptLog provides the essential tools in a clean, intuitive, and responsive interface.
+Your privacy is paramount. With E2EE, your prompt data is encrypted on your device using a master password only you know, making it unreadable to the server and anyone else.
 
 ## Key Features
 
-*   **Effortless Prompt Logging**: Quickly log prompt notes, select the model used, and let the app handle the rest.
-*   **Insightful Dashboard**: Visualize your prompt history with stats on total usage, daily activity, and a breakdown of which models you use most frequently.
-*   **Local-First Storage**: Your data stays on your device by default, using your browser's local storage. No account needed to get started.
-*   **Optional Cloud Sync**: With a single click, migrate your data to a secure Supabase backend. This generates a unique sync key, allowing you to access and update your data from any device.
-*   **QR Code Device Linking**: Easily link a new device to your cloud account by scanning a QR code—no need to manually type long keys.
-*   **Data Portability**: Full control over your data. Export your entire prompt history to a JSON file and import it back at any time, whether you're using local or cloud storage.
+*   **Local-First & Private**: Your data stays on your device by default using your browser's local storage. No account is needed to get started.
+*   **Optional E2EE Cloud Sync**: Enable cloud sync with a master password. Your data is encrypted on your device via the Web Crypto API before being sent to the cloud, ensuring only you can decrypt it.
+*   **Seamless Device Linking**: Easily link a new device to your cloud account by scanning a QR code or entering the sync key manually.
+*   **Insightful Dashboard**: Visualize your prompt history with stats on total usage, daily activity, token counts, and a breakdown of which models you use most frequently.
+*   **Token Tracking & Calculation**: Log output tokens for your prompts, or paste the LLM's output to get an estimated token count.
+*   **Data Portability**: Full control over your data. Export your entire decrypted prompt history to a JSON file and import it back at any time, whether you're using local or cloud storage.
 *   **Custom Model Management**: The default models are just a starting point. Add, remove, and manage your own list of custom model names.
 *   **Responsive Design**: A seamless experience on desktop, tablet, and mobile devices.
 
@@ -34,9 +34,11 @@ Whether you're fine-tuning prompts, comparing model outputs, or simply keeping a
 -   **Language**: [TypeScript](https://www.typescriptlang.org/)
 -   **Styling**: [Tailwind CSS](https://tailwindcss.com/)
 -   **UI Components**: [Shadcn/ui](https://ui.shadcn.com/) (built on Radix UI & CVA)
--   **Backend & DB**: [Supabase](https://supabase.io/) (for optional cloud sync)
--   **State Management**: React Context (`useContext`)
+-   **Security**: [Web Crypto API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API) for End-to-End Encryption (AES-GCM).
+-   **Backend & DB**: [Supabase](https://supabase.io/) (for optional E2EE sync, database, and real-time updates)
+-   **State Management**: React Context (`useContext` and `useState`)
 -   **Data Visualization**: [Recharts](https://recharts.org/)
+-   **QR Code Handling**: [html5-qrcode](https://github.com/mebjas/html5-qrcode) & [qrcode](https://github.com/soldair/node-qrcode)
 -   **Deployment**: [Vercel](https://vercel.com/)
 
 ## Getting Started / Local Development
@@ -61,9 +63,9 @@ Follow these instructions to get a copy of the project up and running on your lo
     npm install
     ```
 
-3.  **Set up environment variables:**
+3.  **Set up environment variables (Optional):**
 
-    Create a file named `.env.local` in the root of the project and add your Supabase credentials. These are only required if you want to test the cloud sync functionality.
+    Create a file named `.env.local` in the root of the project. These variables are only required if you want to test the cloud sync functionality.
 
     ```env
     # .env.local
@@ -97,28 +99,32 @@ LLM-Prompt-Logger/
 │   │   ├── dev.ts
 │   │   └── genkit.ts
 │   ├── app
+│   │   ├── settings
+│   │   │   └── page.tsx
 │   │   ├── globals.css
 │   │   ├── layout.tsx
 │   │   └── page.tsx
 │   ├── components
 │   │   ├── ui/
 │   │   ├── MainLayout.tsx
-│   │   ├── ModelManager.tsx
 │   │   ├── PromptList.tsx
 │   │   ├── PromptLogger.tsx
 │   │   ├── Stats.tsx
-│   │   └── theme-provider.tsx
+│   │   ├── theme-provider.tsx
+│   │   └── Welcome.tsx
 │   ├── hooks
 │   │   ├── use-data.tsx
 │   │   ├── use-mobile.tsx
 │   │   └── use-toast.ts
 │   └── lib
 │       ├── constants.ts
+│       ├── crypto.ts
 │       ├── supabase.ts
 │       ├── types.ts
 │       └── utils.ts
 ├── apphosting.yaml
 ├── components.json
+├── LICENSE
 ├── next.config.ts
 ├── package-lock.json
 ├── package.json
