@@ -1,8 +1,9 @@
 // src/components/PromptList.tsx
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { Prompt } from '@/lib/types'
+import { useData } from '@/hooks/use-data'
 import { Button } from '@/components/ui/button'
 import {
   Table,
@@ -27,8 +28,9 @@ import {
   DialogFooter,
   DialogClose
 } from '@/components/ui/dialog'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Textarea } from './ui/textarea'
-import { MoreHorizontal, ChevronsUpDown, Trash2 } from 'lucide-react'
+import { MoreHorizontal, ChevronsUpDown, Trash2, CloudOff } from 'lucide-react'
 import { Skeleton } from './ui/skeleton'
 import { cn } from '@/lib/utils'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible'
@@ -42,7 +44,6 @@ interface PromptListProps {
 
 const ITEMS_PER_PAGE = 10
 const NOTE_TRUNCATE_LENGTH = 100;
-const NOTE_MAX_LENGTH = 1500;
 
 const DOTS = '...';
 
@@ -105,6 +106,8 @@ export function PromptList({
   const [currentPage, setCurrentPage] = useState(1)
   const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null)
   
+  const { noteCharacterLimit } = useData();
+
   // State for the edit dialog
   const [editedNote, setEditedNote] = useState('')
   const [editedTokens, setEditedTokens] = useState<number | null>(null)
@@ -152,6 +155,13 @@ export function PromptList({
     }
     setOutputText('');
   };
+  
+  const isSaveDisabled = useMemo(() => {
+      if (!editingPrompt) return true;
+      if (editingPrompt.is_local_only) return false;
+      if (noteCharacterLimit && editedNote.length > noteCharacterLimit) return true;
+      return false;
+  }, [editedNote, editingPrompt, noteCharacterLimit]);
 
   if (loading) {
     return (
@@ -189,7 +199,23 @@ export function PromptList({
           <TableBody>
             {paginatedHistory.map(prompt => (
               <TableRow key={prompt.id}>
-                <TableCell className="font-medium md:whitespace-nowrap">{prompt.model}</TableCell>
+                <TableCell className="font-medium md:whitespace-nowrap">
+                  <div className="flex items-center gap-2">
+                    <span>{prompt.model}</span>
+                    {prompt.is_local_only && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <CloudOff className="h-4 w-4 text-muted-foreground" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>This note is only on this device.</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell className="text-muted-foreground max-w-[150px] sm:max-w-sm break-words">
                   {prompt.note && prompt.note.length > NOTE_TRUNCATE_LENGTH ? (
                     <Dialog>
@@ -256,14 +282,15 @@ export function PromptList({
                               value={editedNote}
                               onChange={e => setEditedNote(e.target.value)}
                               rows={7}
-                              maxLength={NOTE_MAX_LENGTH}
+                              maxLength={editingPrompt.is_local_only ? undefined : noteCharacterLimit ?? undefined}
                               placeholder="Enter prompt notes or tags..."
                             />
                             <div className={cn(
                                 "text-right text-xs mt-1",
-                                editedNote.length >= NOTE_MAX_LENGTH ? "text-red-500" : "text-muted-foreground"
+                                !editingPrompt.is_local_only && noteCharacterLimit && editedNote.length > noteCharacterLimit ? "text-red-500" : "text-muted-foreground"
                             )}>
-                              {editedNote.length} / {NOTE_MAX_LENGTH}
+                              {editedNote.length.toLocaleString()}
+                              {noteCharacterLimit && !editingPrompt.is_local_only ? ` / ${noteCharacterLimit.toLocaleString()}` : ' characters'}
                             </div>
                           </div>
                           <Collapsible open={isOutputOpen} onOpenChange={setIsOutputOpen} className="grid gap-2">
@@ -312,7 +339,7 @@ export function PromptList({
                              <Button variant="outline">Cancel</Button>
                           </DialogClose>
                           <DialogClose asChild>
-                            <Button onClick={handleSaveEdit}>Save</Button>
+                            <Button onClick={handleSaveEdit} disabled={isSaveDisabled}>Save</Button>
                           </DialogClose>
                         </DialogFooter>
                       </DialogContent>

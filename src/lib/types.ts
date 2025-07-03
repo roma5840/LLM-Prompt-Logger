@@ -5,6 +5,7 @@ export interface Prompt {
   note: string;
   output_tokens: number | null;
   timestamp: Date;
+  is_local_only?: boolean;
 }
 
 export type Model = string;

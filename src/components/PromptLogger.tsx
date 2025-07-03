@@ -13,6 +13,7 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { Model } from '@/lib/types'
 import { useToast } from '@/hooks/use-toast'
+import { useData } from '@/hooks/use-data'
 import { cn } from '@/lib/utils'
 import { Loader2, ChevronsUpDown } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible'
@@ -25,14 +26,13 @@ interface PromptLoggerProps {
   setIsSubmitting: (isSubmitting: boolean) => void
 }
 
-const NOTE_MAX_LENGTH = 1500;
-
 export function PromptLogger({ addPrompt, models, onPromptLogged, isSubmitting, setIsSubmitting }: PromptLoggerProps) {
   const [selectedModel, setSelectedModel] = useState('')
   const [note, setNote] = useState('')
   const [outputText, setOutputText] = useState('')
   const [isOutputOpen, setIsOutputOpen] = useState(false)
   const { toast } = useToast()
+  const { noteCharacterLimit } = useData()
   
   const outputTokens = useMemo(() => {
     if (!outputText) return 0;
@@ -90,14 +90,15 @@ export function PromptLogger({ addPrompt, models, onPromptLogged, isSubmitting, 
           onChange={e => setNote(e.target.value)}
           placeholder="Enter prompt notes or tags..."
           rows={7}
-          maxLength={NOTE_MAX_LENGTH}
+          maxLength={noteCharacterLimit ?? undefined}
           disabled={isSubmitting}
         />
         <div className={cn(
             "text-right text-xs",
-            note.length >= NOTE_MAX_LENGTH ? "text-red-500" : "text-muted-foreground"
+            noteCharacterLimit && note.length >= noteCharacterLimit ? "text-red-500" : "text-muted-foreground"
         )}>
-          {note.length} / {NOTE_MAX_LENGTH}
+          {note.length.toLocaleString()}
+          {noteCharacterLimit ? ` / ${noteCharacterLimit.toLocaleString()}` : ' characters'}
         </div>
       </div>
       <Collapsible open={isOutputOpen} onOpenChange={setIsOutputOpen} className="grid gap-2">
@@ -124,7 +125,7 @@ export function PromptLogger({ addPrompt, models, onPromptLogged, isSubmitting, 
             />
         </CollapsibleContent>
       </Collapsible>
-      <Button type="submit" disabled={isSubmitting}>
+      <Button type="submit" disabled={isSubmitting || !note || !selectedModel}>
         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
         Log Prompt
       </Button>

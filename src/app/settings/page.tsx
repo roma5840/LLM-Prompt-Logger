@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useData } from '@/hooks/use-data'
 import { useToast } from '@/hooks/use-toast'
 import { MainLayout } from '@/components/MainLayout'
+import { MigrationConflictResolver } from '@/components/MigrationConflictResolver'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -33,6 +34,8 @@ import { Html5Qrcode } from 'html5-qrcode'
 import { Loader2, AlertTriangle, ShieldCheck, ShieldOff } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Separator } from '@/components/ui/separator'
+import { Prompt } from '@/lib/types'
+import { LOCAL_HISTORY_STORAGE } from '@/lib/constants'
 
 const MODEL_NAME_MAX_LENGTH = 80;
 const MODEL_LIMIT = 10;
@@ -49,6 +52,10 @@ export default function SettingsPage() {
   const [isMigrateDialogOpen, setIsMigrateDialogOpen] = useState(false)
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
 
+  // State for the new migration flow
+  const [isResolverOpen, setResolverOpen] = useState(false);
+  const [conflicts, setConflicts] = useState<Prompt[]>([]);
+  const [passwordForMigration, setPasswordForMigration] = useState('');
 
   const isModelLimitReached = data.models.length >= MODEL_LIMIT;
 
@@ -63,12 +70,11 @@ export default function SettingsPage() {
 
   const estimatedStorage = useMemo(() => {
     if (!data.syncKey || !data.history) return 0;
-    // This calculation is now an estimate of the PLAINTEXT size.
-    // Ciphertext size will be slightly larger due to IV and padding.
     const totalBytes = data.history.reduce((acc, prompt) => {
+        if (prompt.is_local_only) return acc;
         const modelBytes = new TextEncoder().encode(prompt.model).length;
         const noteBytes = new TextEncoder().encode(prompt.note).length;
-        const overheadBytes = 56; // Estimated overhead per row in Supabase
+        const overheadBytes = 56;
         return acc + modelBytes + noteBytes + overheadBytes;
     }, 0);
     return totalBytes;
@@ -88,13 +94,17 @@ export default function SettingsPage() {
   }
 
   const handleDeleteAllData = async () => {
-    await data.deleteAllPrompts();
-    toast({
-      title: "Success",
-      description: data.syncKey
-        ? "All your synced data has been deleted."
-        : "All your local prompt history has been deleted.",
-    });
+    try {
+        await data.deleteAllPrompts();
+        toast({
+          title: "Success",
+          description: data.syncKey
+            ? "All your synced data has been deleted."
+            : "All your local prompt history has been deleted.",
+        });
+    } catch(e: any) {
+        toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
   }
 
   const handleUnlinkDevice = () => {
@@ -121,27 +131,69 @@ export default function SettingsPage() {
     }
   };
 
-  const handleMigrateToCloud = async () => {
+  const handleInitiateMigration = async () => {
     if (!masterPassword) {
       toast({ title: "Password Required", description: "Please set a master password.", variant: "destructive" });
       return;
     }
-    try {
-      await data.migrateToCloud(masterPassword)
-      toast({
-        title: "Success!",
-        description: "Cloud sync has been enabled and your data is encrypted.",
-      })
-      setIsMigrateDialogOpen(false)
-      setMasterPassword('')
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      })
+
+    const conflictNotes = data.checkForMigrationConflicts();
+    
+    if (conflictNotes.length > 0) {
+        setConflicts(conflictNotes);
+        setPasswordForMigration(masterPassword);
+        setIsMigrateDialogOpen(false);
+        setResolverOpen(true);
+    } else {
+        // No conflicts, proceed with direct migration
+        try {
+            const localHistoryRaw = localStorage.getItem(LOCAL_HISTORY_STORAGE);
+            const notesToMigrate = localHistoryRaw ? JSON.parse(localHistoryRaw) : [];
+            await data.completeMigration(masterPassword, notesToMigrate, []);
+            toast({
+                title: "Success!",
+                description: "Cloud sync has been enabled and your data is encrypted.",
+            });
+            setIsMigrateDialogOpen(false);
+            setMasterPassword('');
+        } catch (error: any) {
+            toast({ title: "Error", description: error.message, variant: "destructive" });
+        }
     }
-  }
+  };
+
+  const handleResolveConflicts = useCallback(async (notesToMigrate: Prompt[], notesToKeepLocal: Prompt[]) => {
+      try {
+          const allLocalNotesRaw = localStorage.getItem(LOCAL_HISTORY_STORAGE);
+          const allLocalNotes: Prompt[] = allLocalNotesRaw ? JSON.parse(allLocalNotesRaw) : [];
+          
+          const conflictIds = new Set(conflicts.map(c => c.id));
+          const nonConflictNotes = allLocalNotes.filter(p => !conflictIds.has(p.id));
+
+          await data.completeMigration(passwordForMigration, [...nonConflictNotes, ...notesToMigrate], notesToKeepLocal);
+          
+          toast({
+              title: "Migration Complete!",
+              description: "Cloud sync is now enabled.",
+          });
+      } catch (error: any) {
+          toast({ title: "Migration Failed", description: error.message, variant: "destructive" });
+      } finally {
+          setResolverOpen(false);
+          setConflicts([]);
+          setPasswordForMigration('');
+          setMasterPassword('');
+      }
+  }, [data, conflicts, passwordForMigration, toast]);
+
+  const handleCancelConflictResolution = () => {
+      setResolverOpen(false);
+      setConflicts([]);
+      setPasswordForMigration('');
+      setMasterPassword('');
+      toast({ title: "Sync Canceled", description: "The cloud sync process was canceled." });
+  };
+
 
   const handleLinkDevice = async () => {
     if (!manualSyncKey || !masterPassword) {
@@ -195,9 +247,7 @@ export default function SettingsPage() {
             description: error.message,
             variant: "destructive",
         });
-        // Keep dialog open on failure
     } finally {
-        // Reset file input so the same file can be selected again
         const fileInput = document.getElementById('import-file-input') as HTMLInputElement;
         if (fileInput) fileInput.value = '';
         setFileToImport(null);
@@ -373,13 +423,13 @@ export default function SettingsPage() {
                                 placeholder="Create a strong master password" 
                                 value={masterPassword}
                                 onChange={e => setMasterPassword(e.target.value)}
-                                onKeyDown={e => e.key === 'Enter' && handleMigrateToCloud()}
+                                onKeyDown={e => e.key === 'Enter' && handleInitiateMigration()}
                                 disabled={data.syncing}
                             />
                           </div>
                           <DialogFooter className="pt-2">
                              <Button variant="outline" onClick={() => setIsMigrateDialogOpen(false)} disabled={data.syncing}>Cancel</Button>
-                            <Button onClick={handleMigrateToCloud} disabled={data.syncing || !masterPassword}>
+                            <Button onClick={handleInitiateMigration} disabled={data.syncing || !masterPassword}>
                               {data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Enable & Encrypt
                             </Button>
                           </DialogFooter>
@@ -438,7 +488,7 @@ export default function SettingsPage() {
               {data.syncKey && data.history.length > 0 && (
                 <div className="text-xs text-center text-muted-foreground p-2 border rounded-md bg-muted/50">
                   <p>Estimated Original Data Size: <span className="font-semibold">{formattedSize}</span></p>
-                  <p className="mt-1">Based on {data.history.length} synced prompts. Stored size will be larger due to encryption.</p>
+                  <p className="mt-1">Based on {data.history.filter(p => !p.is_local_only).length} synced prompts. Stored size will be larger due to encryption.</p>
                 </div>
               )}
             </CardContent>
@@ -455,19 +505,19 @@ export default function SettingsPage() {
                   <>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="destructive" disabled={data.history.length === 0 || data.isLocked}>Delete All Synced Data</Button>
+                        <Button variant="destructive" disabled={data.history.filter(p => !p.is_local_only).length === 0 || data.isLocked}>Delete All Synced Data</Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
                           <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                           <AlertDialogDescription>
-                            This will permanently delete all encrypted prompt history from your cloud account, affecting all synced devices. This cannot be undone.
+                            This will permanently delete all encrypted prompt history from your cloud account, affecting all synced devices. This action will not affect your local-only notes. This cannot be undone.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancel</AlertDialogCancel>
                           <AlertDialogAction className={buttonVariants({ variant: "destructive" })} onClick={handleDeleteAllData}>
-                            Delete All Data
+                            Delete All Synced Data
                           </AlertDialogAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>
@@ -524,6 +574,13 @@ export default function SettingsPage() {
           </Card>
         </div>
       </main>
+      <MigrationConflictResolver
+        isOpen={isResolverOpen}
+        onOpenChange={setResolverOpen}
+        conflicts={conflicts}
+        onResolve={handleResolveConflicts}
+        onCancel={handleCancelConflictResolution}
+      />
       <AlertDialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

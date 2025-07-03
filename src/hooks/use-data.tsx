@@ -1,9 +1,9 @@
 // src/hooks/use-data.tsx
 'use client'
 
-import { useState, useEffect, useCallback, createContext, useContext, ReactNode } from 'react'
+import { useState, useEffect, useCallback, createContext, useContext, ReactNode, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
-import { DEFAULT_MODELS, LOCAL_HISTORY_STORAGE, LOCAL_MODELS_STORAGE, SYNC_KEY_STORAGE, ENCRYPTION_KEY_STORAGE, SALT_STORAGE } from '@/lib/constants'
+import { DEFAULT_MODELS, LOCAL_HISTORY_STORAGE, LOCAL_MODELS_STORAGE, SYNC_KEY_STORAGE, ENCRYPTION_KEY_STORAGE, SALT_STORAGE, NOTE_CHAR_LIMIT, LOCAL_ONLY_HISTORY_STORAGE } from '@/lib/constants'
 import { Prompt, Model } from '@/lib/types'
 import { useToast } from './use-toast'
 import { deriveKey, encrypt, decrypt } from '@/lib/crypto'
@@ -15,13 +15,15 @@ interface DataContextType {
   loading: boolean;
   syncing: boolean;
   isLocked: boolean;
+  noteCharacterLimit: number | null;
   addPrompt: (model: string, note: string, outputTokens: number | null) => Promise<void>;
   updatePrompt: (id: number, note: string, outputTokens: number | null) => Promise<void>;
   deletePrompt: (id: number) => Promise<void>;
   deleteAllPrompts: () => Promise<void>;
   deleteAccount: () => Promise<void>;
   updateUserModels: (newModels: Model[]) => Promise<void>;
-  migrateToCloud: (password: string) => Promise<void>;
+  checkForMigrationConflicts: () => Prompt[];
+  completeMigration: (password: string, notesToMigrate: Prompt[], notesToKeepLocal: Prompt[]) => Promise<void>;
   linkDeviceWithKey: (key: string, password: string) => Promise<void>;
   unlinkDevice: () => void;
   lock: () => void;
@@ -75,6 +77,7 @@ const loadKeyFromLocalStorage = async (): Promise<CryptoKey | null> => {
 
 export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [history, setHistory] = useState<Prompt[]>([])
+  const [localOnlyHistory, setLocalOnlyHistory] = useState<Prompt[]>([]);
   const [models, setModels] = useState<Model[]>(DEFAULT_MODELS)
   const [syncKey, setSyncKey] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -83,11 +86,18 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [isLocked, setIsLocked] = useState(false);
   const { toast } = useToast();
 
+  const noteCharacterLimit = useMemo(() => syncKey ? NOTE_CHAR_LIMIT : null, [syncKey]);
+
+  const mergedHistory = useMemo(() => {
+    return [...history, ...localOnlyHistory].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }, [history, localOnlyHistory]);
+
   const lock = useCallback(() => {
     localStorage.removeItem(ENCRYPTION_KEY_STORAGE);
     setEncryptionKey(null);
     setIsLocked(true);
     setHistory([]);
+    setLocalOnlyHistory([]);
     setModels(DEFAULT_MODELS);
   }, []);
 
@@ -97,11 +107,13 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     localStorage.removeItem(ENCRYPTION_KEY_STORAGE);
     localStorage.removeItem(LOCAL_HISTORY_STORAGE);
     localStorage.removeItem(LOCAL_MODELS_STORAGE);
+    localStorage.removeItem(LOCAL_ONLY_HISTORY_STORAGE);
     
     setSyncKey(null);
     setEncryptionKey(null);
     setIsLocked(false);
     setHistory([]);
+    setLocalOnlyHistory([]);
     setModels(DEFAULT_MODELS);
 
     if (options?.showToast) {
@@ -151,6 +163,11 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     }
     
     setModels(bucketData[0].models || [...DEFAULT_MODELS]);
+    
+    const localOnlyData = localStorage.getItem(LOCAL_ONLY_HISTORY_STORAGE);
+    if (localOnlyData) {
+        setLocalOnlyHistory(JSON.parse(localOnlyData).map((p: any) => ({...p, timestamp: new Date(p.timestamp)})));
+    }
 
     const { data: promptsData, error: promptsError } = await supabase.rpc('get_my_prompts', { p_bucket_id: key });
     if (promptsError) {
@@ -235,6 +252,10 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [history, models, syncKey]);
 
+  useEffect(() => {
+    localStorage.setItem(LOCAL_ONLY_HISTORY_STORAGE, JSON.stringify(localOnlyHistory));
+  }, [localOnlyHistory]);
+
   const broadcastChange = async (event: string) => {
     if (!syncKey) return;
     try {
@@ -246,7 +267,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
-    if (!syncKey || !encryptionKey) return;
+    if (!syncKey || !encryptionKey || isLocked) return;
 
     const channel = supabase.channel(`data-sync-${syncKey}`);
     channel
@@ -264,7 +285,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [syncKey, encryptionKey, refreshDataFromSupabase, unlinkDevice]);
+  }, [syncKey, encryptionKey, isLocked, refreshDataFromSupabase, unlinkDevice]);
 
   const addPrompt = async (model: string, note: string, outputTokens: number | null) => {
     if (syncKey) {
@@ -290,51 +311,68 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   }
 
   const updatePrompt = async (promptId: number, newNote: string, newOutputTokens: number | null) => {
-    setHistory(prev => prev.map(p => p.id === promptId ? { ...p, note: newNote, output_tokens: newOutputTokens } : p))
-    if (syncKey) {
-      if (!encryptionKey) throw new Error("App is locked. Cannot update prompt.");
-      const encryptedNote = await encrypt(newNote, encryptionKey);
-      const encryptedTokens = newOutputTokens !== null ? await encrypt(String(newOutputTokens), encryptionKey) : null;
+    const targetPrompt = mergedHistory.find(p => p.id === promptId);
+    if (!targetPrompt) return;
 
-      const { error } = await supabase.rpc('update_my_prompt', { 
-        p_prompt_id: promptId, 
-        p_bucket_id: syncKey, 
-        p_new_note: encryptedNote,
-        p_new_output_tokens: encryptedTokens
-      })
-      if (error) {
-        refreshDataFromSupabase(syncKey, encryptionKey) // Revert
-      } else {
-        await broadcastChange('prompts_changed');
+    if (targetPrompt.is_local_only) {
+      setLocalOnlyHistory(prev => prev.map(p => p.id === promptId ? { ...p, note: newNote, output_tokens: newOutputTokens } : p));
+    } else {
+      setHistory(prev => prev.map(p => p.id === promptId ? { ...p, note: newNote, output_tokens: newOutputTokens } : p));
+      if (syncKey) {
+        if (!encryptionKey) throw new Error("App is locked. Cannot update prompt.");
+        const encryptedNote = await encrypt(newNote, encryptionKey);
+        const encryptedTokens = newOutputTokens !== null ? await encrypt(String(newOutputTokens), encryptionKey) : null;
+
+        const { error } = await supabase.rpc('update_my_prompt', { 
+          p_prompt_id: promptId, 
+          p_bucket_id: syncKey, 
+          p_new_note: encryptedNote,
+          p_new_output_tokens: encryptedTokens
+        })
+        if (error) {
+          refreshDataFromSupabase(syncKey, encryptionKey) // Revert
+        } else {
+          await broadcastChange('prompts_changed');
+        }
       }
     }
   }
 
   const deletePrompt = async (promptId: number) => {
-    const originalHistory = history
-    setHistory(prev => prev.filter(p => p.id !== promptId))
-    if (syncKey) {
-      if (!encryptionKey) throw new Error("App is locked. Cannot delete prompt.");
-      const { error } = await supabase.rpc('delete_my_prompt', { p_prompt_id: promptId, p_bucket_id: syncKey })
-      if (error) {
-        setHistory(originalHistory)
-      } else {
-        await broadcastChange('prompts_changed');
-      }
+    const targetPrompt = mergedHistory.find(p => p.id === promptId);
+    if (!targetPrompt) return;
+
+    if (targetPrompt.is_local_only) {
+        setLocalOnlyHistory(prev => prev.filter(p => p.id !== promptId));
+    } else {
+        const originalHistory = history
+        setHistory(prev => prev.filter(p => p.id !== promptId))
+        if (syncKey) {
+          if (!encryptionKey) throw new Error("App is locked. Cannot delete prompt.");
+          const { error } = await supabase.rpc('delete_my_prompt', { p_prompt_id: promptId, p_bucket_id: syncKey })
+          if (error) {
+            setHistory(originalHistory)
+          } else {
+            await broadcastChange('prompts_changed');
+          }
+        }
     }
   }
 
   const deleteAllPrompts = async () => {
-    const originalHistory = history
-    setHistory([])
     if (syncKey) {
       if (!encryptionKey) throw new Error("App is locked. Cannot delete prompts.");
+      const originalHistory = history;
+      setHistory([]);
       const { error } = await supabase.rpc('delete_all_my_prompts', { p_bucket_id: syncKey })
       if (error) {
-        setHistory(originalHistory)
+        setHistory(originalHistory);
+        throw error;
       } else {
         await broadcastChange('prompts_changed');
       }
+    } else {
+        setHistory([]);
     }
   }
 
@@ -352,27 +390,33 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     }
   }
 
-  const migrateToCloud = async (password: string) => {
+  const checkForMigrationConflicts = (): Prompt[] => {
+    const localHistoryRaw = localStorage.getItem(LOCAL_HISTORY_STORAGE);
+    if (!localHistoryRaw) return [];
+    const localHistory: Prompt[] = JSON.parse(localHistoryRaw);
+    return localHistory.filter(p => p.note && p.note.length > NOTE_CHAR_LIMIT);
+  };
+
+  const completeMigration = async (password: string, notesToMigrate: Prompt[], notesToKeepLocal: Prompt[]) => {
     setSyncing(true)
     try {
       const salt = window.btoa(String.fromCharCode.apply(null, Array.from(window.crypto.getRandomValues(new Uint8Array(16)))));
       const derivedKey = await deriveKey(password, salt);
       const verificationHash = await encrypt(VERIFICATION_STRING, derivedKey);
 
-      const localModels = JSON.parse(localStorage.getItem(LOCAL_MODELS_STORAGE) || JSON.stringify(DEFAULT_MODELS))
-      const localHistory = JSON.parse(localStorage.getItem(LOCAL_HISTORY_STORAGE) || '[]')
+      const localModels = JSON.parse(localStorage.getItem(LOCAL_MODELS_STORAGE) || JSON.stringify(DEFAULT_MODELS));
 
       const { data: newKey, error: createError } = await supabase.rpc('create_new_bucket', { 
         p_models: localModels, 
         p_salt: salt, 
         p_verification_hash: verificationHash 
-      })
+      });
       if (createError || !newKey) {
-        throw new Error('Could not enable sync. Please try again.')
+        throw new Error('Could not enable sync. Please try again.');
       }
 
-      if (localHistory.length > 0) {
-        const encryptedHistoryBatch = await Promise.all(localHistory.map(async (entry: any) => {
+      if (notesToMigrate.length > 0) {
+        const encryptedHistoryBatch = await Promise.all(notesToMigrate.map(async (entry: any) => {
             const encryptedNote = await encrypt(entry.note || '', derivedKey);
             const encryptedTokens = entry.output_tokens !== null ? await encrypt(String(entry.output_tokens), derivedKey) : null;
             return {
@@ -390,15 +434,20 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         if (batchError) throw batchError;
       }
       
+      const finalLocalNotes = notesToKeepLocal.map(p => ({ ...p, is_local_only: true }));
+      setLocalOnlyHistory(finalLocalNotes);
+
       await saveKeyToLocalStorage(derivedKey);
       localStorage.setItem(SYNC_KEY_STORAGE, newKey);
       localStorage.setItem(SALT_STORAGE, salt);
+      localStorage.setItem(LOCAL_ONLY_HISTORY_STORAGE, JSON.stringify(finalLocalNotes));
       localStorage.removeItem(LOCAL_HISTORY_STORAGE);
       localStorage.removeItem(LOCAL_MODELS_STORAGE);
       
       setSyncKey(newKey);
       setEncryptionKey(derivedKey);
       setIsLocked(false);
+      setHistory([]); // Will be populated by refreshData
       await refreshDataFromSupabase(newKey, derivedKey);
 
     } finally {
@@ -466,7 +515,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     }
     const dataToExport = {
         models: models,
-        history: history.map(p => ({ model: p.model, note: p.note, output_tokens: p.output_tokens, timestamp: new Date(p.timestamp).toISOString() }))
+        history: mergedHistory.map(p => ({ model: p.model, note: p.note, output_tokens: p.output_tokens, timestamp: new Date(p.timestamp).toISOString() }))
     };
 
     const dataStr = JSON.stringify(dataToExport, null, 2);
@@ -545,19 +594,21 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   }
 
   const value = {
-    history,
+    history: mergedHistory,
     models,
     syncKey,
     loading,
     syncing,
     isLocked,
+    noteCharacterLimit,
     addPrompt,
     updatePrompt,
     deletePrompt,
     deleteAllPrompts,
     deleteAccount,
     updateUserModels,
-    migrateToCloud,
+    checkForMigrationConflicts,
+    completeMigration,
     linkDeviceWithKey,
     unlinkDevice,
     lock,
