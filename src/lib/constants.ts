@@ -1,4 +1,5 @@
 export const SYNC_KEY_STORAGE = 'llmPromptSyncKey';
+export const ACCESS_TOKEN_STORAGE = 'llmPromptAccessToken';
 export const LOCAL_HISTORY_STORAGE = 'llmLocalHistory';
 export const LOCAL_MODELS_STORAGE = 'llmLocalModels';
 export const LOCAL_ONLY_HISTORY_STORAGE = 'llmLocalOnlyHistory';

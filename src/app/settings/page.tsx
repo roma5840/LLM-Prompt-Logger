@@ -301,6 +301,8 @@ export default function SettingsPage() {
       })
     }
   }
+  
+  const combinedSyncKey = data.syncKey && data.accessToken ? `${data.syncKey}:${data.accessToken}` : '';
 
   return (
     <MainLayout>
@@ -388,8 +390,8 @@ export default function SettingsPage() {
                         <DialogTrigger asChild><Button>Link Another Device</Button></DialogTrigger>
                         <DialogContent>
                           <DialogHeader><DialogTitle>Scan QR Code</DialogTitle></DialogHeader>
-                          <div className="flex justify-center my-4"><canvas id="qr-code-canvas" ref={canvas => canvas && generateQrCode(data.syncKey!, canvas)}></canvas></div>
-                          <Input value={data.syncKey} readOnly />
+                          <div className="flex justify-center my-4"><canvas id="qr-code-canvas" ref={canvas => canvas && combinedSyncKey && generateQrCode(combinedSyncKey, canvas)}></canvas></div>
+                          <Input value={combinedSyncKey} readOnly />
                         </DialogContent>
                       </Dialog>
                       <AlertDialog>

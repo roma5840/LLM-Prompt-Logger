@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback, createContext, useContext, ReactNode, useMemo, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
-import { DEFAULT_MODELS, LOCAL_HISTORY_STORAGE, LOCAL_MODELS_STORAGE, SYNC_KEY_STORAGE, ENCRYPTION_KEY_STORAGE, SALT_STORAGE, NOTE_CHAR_LIMIT, LOCAL_ONLY_HISTORY_STORAGE } from '@/lib/constants'
+import { DEFAULT_MODELS, LOCAL_HISTORY_STORAGE, LOCAL_MODELS_STORAGE, SYNC_KEY_STORAGE, ENCRYPTION_KEY_STORAGE, SALT_STORAGE, NOTE_CHAR_LIMIT, LOCAL_ONLY_HISTORY_STORAGE, ACCESS_TOKEN_STORAGE } from '@/lib/constants'
 import { Prompt, Model } from '@/lib/types'
 import { useToast } from './use-toast'
 import { deriveKey, encrypt, decrypt } from '@/lib/crypto'
@@ -12,6 +12,7 @@ interface DataContextType {
   history: Prompt[];
   models: Model[];
   syncKey: string | null;
+  accessToken: string | null;
   loading: boolean;
   syncing: boolean;
   isLocked: boolean;
@@ -46,7 +47,21 @@ export const useData = (): DataContextType => {
 
 const VERIFICATION_STRING = 'PROMPT_LOG_OK';
 
-// --- HELPER FUNCTIONS FOR KEY STORAGE ---
+// --- HELPER FUNCTIONS ---
+const generateAccessToken = (): string => {
+  const array = new Uint32Array(8);
+  window.crypto.getRandomValues(array);
+  return Array.from(array, dec => ('0' + dec.toString(16)).slice(-8)).join('');
+};
+
+const hashAccessToken = async (token: string): Promise<string> => {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(token);
+  const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+};
+
 const saveKeyToLocalStorage = async (key: CryptoKey) => {
     try {
         const jwk = await window.crypto.subtle.exportKey('jwk', key);
@@ -80,6 +95,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [localOnlyHistory, setLocalOnlyHistory] = useState<Prompt[]>([]);
   const [models, setModels] = useState<Model[]>(DEFAULT_MODELS)
   const [syncKey, setSyncKey] = useState<string | null>(null)
+  const [accessToken, setAccessToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [encryptionKey, setEncryptionKey] = useState<CryptoKey | null>(null);
@@ -116,6 +132,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     const preservedModels = modelsRef.current;
 
     localStorage.removeItem(SYNC_KEY_STORAGE);
+    localStorage.removeItem(ACCESS_TOKEN_STORAGE);
     localStorage.removeItem(SALT_STORAGE);
     localStorage.removeItem(ENCRYPTION_KEY_STORAGE);
     localStorage.removeItem(LOCAL_ONLY_HISTORY_STORAGE);
@@ -123,6 +140,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     localStorage.removeItem(LOCAL_MODELS_STORAGE);
 
     setSyncKey(null);
+    setAccessToken(null);
     setEncryptionKey(null);
     setIsLocked(false);
 
@@ -204,8 +222,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     try {
         const key = localStorage.getItem(SYNC_KEY_STORAGE);
         const salt = localStorage.getItem(SALT_STORAGE);
-        if (!key || !salt) {
-            throw new Error("Cannot unlock, sync key or salt not found on device.");
+        const token = localStorage.getItem(ACCESS_TOKEN_STORAGE);
+        if (!key || !salt || !token) {
+            throw new Error("Cannot unlock, sync key, salt, or access token not found on device.");
         }
         const derivedKey = await deriveKey(password, salt);
 
@@ -223,6 +242,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
         await saveKeyToLocalStorage(derivedKey);
         setEncryptionKey(derivedKey);
+        setAccessToken(token);
         setIsLocked(false);
         await loadDataFromSupabase(key, derivedKey);
     } catch (err) {
@@ -235,8 +255,10 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const initialize = async () => {
         const key = localStorage.getItem(SYNC_KEY_STORAGE);
-        if (key) {
+        const token = localStorage.getItem(ACCESS_TOKEN_STORAGE);
+        if (key && token) {
             setSyncKey(key);
+            setAccessToken(token);
             const loadedKey = await loadKeyFromLocalStorage();
             if (loadedKey) {
                 // Key found, app is unlocked
@@ -310,14 +332,20 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   const addPrompt = async (model: string, note: string, outputTokens: number | null) => {
     if (syncKey) {
-      if (!encryptionKey) throw new Error("App is locked. Cannot add prompt.");
+      if (!encryptionKey || !accessToken) throw new Error("App is locked. Cannot add prompt.");
       const encryptedNote = await encrypt(note, encryptionKey);
       const encryptedTokens = outputTokens !== null ? await encrypt(String(outputTokens), encryptionKey) : null;
       
       const optimisticPrompt: Prompt = { id: Date.now(), bucket_id: syncKey, model, note, output_tokens: outputTokens, timestamp: new Date() }
       setHistory(prev => [optimisticPrompt, ...prev])
       
-      const { error } = await supabase.rpc('add_new_prompt', { p_bucket_id: syncKey, p_model: model, p_note: encryptedNote, p_output_tokens: encryptedTokens })
+      const { error } = await supabase.rpc('add_new_prompt', { 
+          p_bucket_id: syncKey, 
+          p_model: model, 
+          p_note: encryptedNote, 
+          p_output_tokens: encryptedTokens,
+          p_access_token: accessToken
+      })
       if (error) {
         setHistory(prev => prev.filter(p => p.id !== optimisticPrompt.id))
         throw new Error("Failed to log prompt. The server might be unreachable.");
@@ -340,7 +368,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     } else {
       setHistory(prev => prev.map(p => p.id === promptId ? { ...p, note: newNote, output_tokens: newOutputTokens } : p));
       if (syncKey) {
-        if (!encryptionKey) throw new Error("App is locked. Cannot update prompt.");
+        if (!encryptionKey || !accessToken) throw new Error("App is locked. Cannot update prompt.");
         const encryptedNote = await encrypt(newNote, encryptionKey);
         const encryptedTokens = newOutputTokens !== null ? await encrypt(String(newOutputTokens), encryptionKey) : null;
 
@@ -348,7 +376,8 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
           p_prompt_id: promptId, 
           p_bucket_id: syncKey, 
           p_new_note: encryptedNote,
-          p_new_output_tokens: encryptedTokens
+          p_new_output_tokens: encryptedTokens,
+          p_access_token: accessToken
         })
         if (error) {
           refreshDataFromSupabase(syncKey, encryptionKey) // Revert
@@ -369,8 +398,12 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         const originalHistory = history
         setHistory(prev => prev.filter(p => p.id !== promptId))
         if (syncKey) {
-          if (!encryptionKey) throw new Error("App is locked. Cannot delete prompt.");
-          const { error } = await supabase.rpc('delete_my_prompt', { p_prompt_id: promptId, p_bucket_id: syncKey })
+          if (!encryptionKey || !accessToken) throw new Error("App is locked. Cannot delete prompt.");
+          const { error } = await supabase.rpc('delete_my_prompt', { 
+              p_prompt_id: promptId, 
+              p_bucket_id: syncKey,
+              p_access_token: accessToken
+          })
           if (error) {
             setHistory(originalHistory)
           } else {
@@ -382,10 +415,13 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   const deleteAllPrompts = async () => {
     if (syncKey) {
-      if (!encryptionKey) throw new Error("App is locked. Cannot delete prompts.");
+      if (!encryptionKey || !accessToken) throw new Error("App is locked. Cannot delete prompts.");
       const originalHistory = history;
       setHistory([]);
-      const { error } = await supabase.rpc('delete_all_my_prompts', { p_bucket_id: syncKey })
+      const { error } = await supabase.rpc('delete_all_my_prompts', { 
+          p_bucket_id: syncKey,
+          p_access_token: accessToken
+      })
       if (error) {
         setHistory(originalHistory);
         throw error;
@@ -401,8 +437,12 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     const originalModels = models
     setModels(newModels)
     if (syncKey) {
-      if (!encryptionKey) throw new Error("App is locked. Cannot update models.");
-      const { error } = await supabase.rpc('update_my_models', { p_bucket_id: syncKey, p_new_models: newModels })
+      if (!encryptionKey || !accessToken) throw new Error("App is locked. Cannot update models.");
+      const { error } = await supabase.rpc('update_my_models', { 
+          p_bucket_id: syncKey, 
+          p_new_models: newModels,
+          p_access_token: accessToken
+      })
       if (error) {
         setModels(originalModels)
       } else {
@@ -424,13 +464,17 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       const salt = window.btoa(String.fromCharCode.apply(null, Array.from(window.crypto.getRandomValues(new Uint8Array(16)))));
       const derivedKey = await deriveKey(password, salt);
       const verificationHash = await encrypt(VERIFICATION_STRING, derivedKey);
+      
+      const newAccessToken = generateAccessToken();
+      const accessTokenHash = await hashAccessToken(newAccessToken);
 
       const localModels = JSON.parse(localStorage.getItem(LOCAL_MODELS_STORAGE) || JSON.stringify(DEFAULT_MODELS));
 
       const { data: newKey, error: createError } = await supabase.rpc('create_new_bucket', { 
         p_models: localModels, 
         p_salt: salt, 
-        p_verification_hash: verificationHash 
+        p_verification_hash: verificationHash,
+        p_access_token_hash: accessTokenHash
       });
       if (createError || !newKey) {
         throw new Error('Could not enable sync. Please try again.');
@@ -450,7 +494,8 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         
         const { error: batchError } = await supabase.rpc('batch_add_prompts', {
             p_bucket_id: newKey,
-            p_prompts_jsonb: encryptedHistoryBatch
+            p_prompts_jsonb: encryptedHistoryBatch,
+            p_access_token: newAccessToken
         });
         if (batchError) throw batchError;
       }
@@ -460,12 +505,14 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
       await saveKeyToLocalStorage(derivedKey);
       localStorage.setItem(SYNC_KEY_STORAGE, newKey);
+      localStorage.setItem(ACCESS_TOKEN_STORAGE, newAccessToken);
       localStorage.setItem(SALT_STORAGE, salt);
       localStorage.setItem(LOCAL_ONLY_HISTORY_STORAGE, JSON.stringify(finalLocalNotes));
       localStorage.removeItem(LOCAL_HISTORY_STORAGE);
       localStorage.removeItem(LOCAL_MODELS_STORAGE);
       
       setSyncKey(newKey);
+      setAccessToken(newAccessToken);
       setEncryptionKey(derivedKey);
       setIsLocked(false);
       setHistory([]); // Will be populated by refreshData
@@ -476,8 +523,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     }
   }
 
-  const linkDeviceWithKey = async (key: string, password: string) => {
-    if (!key || key.length < 36) {
+  const linkDeviceWithKey = async (fullSyncKey: string, password: string) => {
+    const [key, token] = fullSyncKey.split(':');
+    if (!key || !token || key.length < 36) {
         throw new Error('Invalid Sync Key format.')
     }
     setSyncing(true)
@@ -500,11 +548,13 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
         await saveKeyToLocalStorage(derivedKey);
         localStorage.setItem(SYNC_KEY_STORAGE, key)
+        localStorage.setItem(ACCESS_TOKEN_STORAGE, token);
         localStorage.setItem(SALT_STORAGE, salt);
         localStorage.removeItem(LOCAL_HISTORY_STORAGE)
         localStorage.removeItem(LOCAL_MODELS_STORAGE)
         
         setSyncKey(key);
+        setAccessToken(token);
         setEncryptionKey(derivedKey);
         setIsLocked(false);
         await refreshDataFromSupabase(key, derivedKey);
@@ -515,11 +565,14 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   }
 
   const deleteAccount = async () => {
-    if (!syncKey) return;
+    if (!syncKey || !accessToken) return;
     setSyncing(true)
     try {
       await broadcastChange('account_deleted');
-      const { error } = await supabase.rpc('delete_my_account', { p_bucket_id: syncKey })
+      const { error } = await supabase.rpc('delete_my_account', { 
+          p_bucket_id: syncKey,
+          p_access_token: accessToken
+      })
       if (error) {
         throw new Error('Could not delete account. Please try again.');
       }
@@ -566,9 +619,8 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         }
         
         if (syncKey) {
-            if (!encryptionKey) throw new Error("App is locked. Cannot import.");
+            if (!encryptionKey || !accessToken) throw new Error("App is locked. Cannot import.");
 
-            // Validate note length before proceeding with import for synced accounts
             const oversizedNote = importedData.history.find(
               (p: any) => p.note && typeof p.note === 'string' && p.note.length > NOTE_CHAR_LIMIT
             );
@@ -577,12 +629,10 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
               throw new Error(`Import failed. A note in the file exceeds the ${NOTE_CHAR_LIMIT} character limit for synced accounts.`);
             }
             
-            // Clear existing data and update models
-            await supabase.rpc('delete_all_my_prompts', { p_bucket_id: syncKey })
-            await supabase.rpc('update_my_models', { p_bucket_id: syncKey, p_new_models: importedData.models })
+            await supabase.rpc('delete_all_my_prompts', { p_bucket_id: syncKey, p_access_token: accessToken })
+            await supabase.rpc('update_my_models', { p_bucket_id: syncKey, p_new_models: importedData.models, p_access_token: accessToken })
             
             if (importedData.history.length > 0) {
-                // Encrypt all prompts on the client before sending
                 const encryptedHistoryBatch = await Promise.all(importedData.history.map(async (entry: any) => {
                     const encryptedNote = await encrypt(entry.note || '', encryptionKey);
                     const encryptedTokens = entry.output_tokens !== null ? await encrypt(String(entry.output_tokens), encryptionKey) : null;
@@ -594,10 +644,10 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
                     };
                 }));
 
-                // Call the new batch function
                 const { error: batchError } = await supabase.rpc('batch_add_prompts', {
                     p_bucket_id: syncKey,
-                    p_prompts_jsonb: encryptedHistoryBatch
+                    p_prompts_jsonb: encryptedHistoryBatch,
+                    p_access_token: accessToken
                 });
                 if (batchError) throw batchError;
             }
@@ -627,6 +677,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     history: mergedHistory,
     models,
     syncKey,
+    accessToken,
     loading,
     syncing,
     isLocked,
