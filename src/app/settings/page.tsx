@@ -111,7 +111,7 @@ export default function SettingsPage() {
     data.unlinkDevice();
     toast({
       title: "Device Unlinked",
-      description: "This device has been unlinked and reset to its default state.",
+      description: "This device has been unlinked. Your local-only notes have been preserved.",
     });
   };
 

@@ -1,7 +1,7 @@
 // src/hooks/use-data.tsx
 'use client'
 
-import { useState, useEffect, useCallback, createContext, useContext, ReactNode, useMemo } from 'react'
+import { useState, useEffect, useCallback, createContext, useContext, ReactNode, useMemo, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { DEFAULT_MODELS, LOCAL_HISTORY_STORAGE, LOCAL_MODELS_STORAGE, SYNC_KEY_STORAGE, ENCRYPTION_KEY_STORAGE, SALT_STORAGE, NOTE_CHAR_LIMIT, LOCAL_ONLY_HISTORY_STORAGE } from '@/lib/constants'
 import { Prompt, Model } from '@/lib/types'
@@ -86,6 +86,16 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [isLocked, setIsLocked] = useState(false);
   const { toast } = useToast();
 
+  const localOnlyHistoryRef = useRef(localOnlyHistory);
+  useEffect(() => {
+    localOnlyHistoryRef.current = localOnlyHistory;
+  }, [localOnlyHistory]);
+
+  const modelsRef = useRef(models);
+  useEffect(() => {
+    modelsRef.current = models;
+  }, [models]);
+
   const noteCharacterLimit = useMemo(() => syncKey ? NOTE_CHAR_LIMIT : null, [syncKey]);
 
   const mergedHistory = useMemo(() => {
@@ -99,24 +109,32 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const unlinkDevice = useCallback((options?: { showToast?: boolean; title?: string; message?: string }) => {
+    const preservedHistory = localOnlyHistoryRef.current.map(p => {
+        const { is_local_only, ...rest } = p;
+        return rest;
+    });
+    const preservedModels = modelsRef.current;
+
     localStorage.removeItem(SYNC_KEY_STORAGE);
     localStorage.removeItem(SALT_STORAGE);
     localStorage.removeItem(ENCRYPTION_KEY_STORAGE);
+    localStorage.removeItem(LOCAL_ONLY_HISTORY_STORAGE);
     localStorage.removeItem(LOCAL_HISTORY_STORAGE);
     localStorage.removeItem(LOCAL_MODELS_STORAGE);
-    localStorage.removeItem(LOCAL_ONLY_HISTORY_STORAGE);
-    
+
     setSyncKey(null);
     setEncryptionKey(null);
     setIsLocked(false);
-    setHistory([]);
+
+    setHistory(preservedHistory);
     setLocalOnlyHistory([]);
-    setModels(DEFAULT_MODELS);
+
+    setModels(preservedModels);
 
     if (options?.showToast) {
         toast({
             title: options.title || "Device Unlinked",
-            description: options.message || "Cloud sync has been disabled on this device.",
+            description: options.message || "Cloud sync has been disabled. Your local-only notes have been preserved.",
             variant: "destructive",
             duration: 10000,
         });
