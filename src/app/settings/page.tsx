@@ -243,7 +243,7 @@ export default function SettingsPage() {
                   <li key={model} className="flex justify-between items-center text-sm p-2 rounded-md hover:bg-accent">
                     <span className="break-all pr-2">{model}</span>
                     <AlertDialog>
-                      <AlertDialogTrigger asChild><Button variant="ghost" size="sm">Remove</Button></AlertDialogTrigger>
+                      <AlertDialogTrigger asChild><Button variant="outline" size="sm">Remove</Button></AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
                           <AlertDialogTitle>Are you sure?</AlertDialogTitle>
