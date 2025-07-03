@@ -1,18 +1,12 @@
+<svg width="256" height="256" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>PromptLog Icon</title>
+  <desc>An icon for the PromptLog application, showing a chat bubble with a bar chart inside to represent logging and analyzing AI prompts.</desc>
 
-<svg
-  width="100"
-  height="100"
-  viewBox="0 0 24 24"
-  fill="none"
-  xmlns="http://www.w3.org/2000/svg"
-  aria-label="PromptLog Favicon"
->
+  <path d="M28 4H4C2.895 4 2 4.895 2 6V22C2 23.105 2.895 24 4 24H9L13 28L17 24H28C29.105 24 30 23.105 30 22V6C30 4.895 29.105 4 28 4Z" fill="#6A4DDE"/>
 
-  <path
-    d="M12 6V2H2v12h4v4l4-4h4a2 2 0 0 0 2-2V6h-4Z"
-    fill="hsl(262, 52%, 51%)"
-  />
-
-  <circle cx="9" cy="9" r="1" fill="hsl(0, 0%, 98%)" />
-  <circle cx="15" cy="9" r="1" fill="hsl(0, 0%, 98%)" />
+  <g fill="white">
+    <rect x="7" y="18" width="4" height="4" rx="1"/>
+    <rect x="14" y="14" width="4" height="8" rx="1"/>
+    <rect x="21" y="10" width="4" height="12" rx="1"/>
+  </g>
 </svg>
