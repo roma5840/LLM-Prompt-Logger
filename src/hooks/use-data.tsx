@@ -23,7 +23,13 @@ import {
   LOCAL_ONLY_HISTORY_STORAGE,
   SESSION_MASTER_PASSWORD_STORAGE,
 } from "@/lib/constants";
-import { Conversation, Model, Turn } from "@/lib/types";
+import {
+  Conversation,
+  Model,
+  Turn,
+  ImportConflict,
+  ParsedImportData,
+} from "@/lib/types";
 import { useToast } from "./use-toast";
 import {
   deriveEncryptionKey,
@@ -860,7 +866,10 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     URL.revokeObjectURL(url);
   };
 
-  const handleImportData = async (file: File) => {
+  const handleImportData = async (
+    file: File,
+    onConflict: (conflicts: ImportConflict[], parsedData: ParsedImportData) => void
+  ) => {
     if (isLocked) {
       toast({
         title: "Unlock required",
@@ -872,47 +881,98 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     setSyncing(true);
     try {
       const text = await file.text();
-      const importedData = JSON.parse(text);
+      const rawData = JSON.parse(text);
       if (
-        !importedData ||
-        !Array.isArray(importedData.conversations) ||
-        !Array.isArray(importedData.models)
+        !rawData ||
+        !Array.isArray(rawData.conversations) ||
+        !Array.isArray(rawData.models)
       ) {
         throw new Error("Invalid file format.");
       }
-      if (syncKey) {
-        toast({
-          title: "Import Disabled",
-          description:
-            "Importing data directly into a synced account is not yet supported. Please unlink first.",
-          variant: "destructive",
+
+      const parsedData: ParsedImportData = {
+        models: rawData.models,
+        conversations: rawData.conversations.map(
+          (c: any, index: number) => ({
+            id: c.id || Date.now() + index,
+            title: c.title,
+            created_at: new Date(c.created_at),
+            updated_at: new Date(c.updated_at),
+            messages: c.messages.map((m: any, msgIndex: number) => ({
+              id: m.id || Date.now() + index + msgIndex,
+              conversation_id: c.id,
+              ...m,
+              timestamp: new Date(m.timestamp),
+            })),
+          })
+        ),
+      };
+
+      if (syncKey && noteCharacterLimit) {
+        const conflicts: ImportConflict[] = [];
+        parsedData.conversations.forEach(convo => {
+          convo.messages.forEach(turn => {
+            if (turn.content && turn.content.length > noteCharacterLimit) {
+              conflicts.push({
+                conversationId: convo.id,
+                conversationTitle: convo.title,
+                turnId: turn.id,
+                turnContent: turn.content,
+                turnTimestamp: turn.timestamp,
+              });
+            }
+          });
         });
-        throw new Error("Import to synced account disabled.");
+
+        if (conflicts.length > 0) {
+          onConflict(conflicts, parsedData);
+          return;
+        }
       }
-      const newConversations: Conversation[] = importedData.conversations.map(
-        (c: any) => ({
-          id: Date.now() + Math.random(),
-          title: c.title,
-          created_at: new Date(c.created_at),
-          updated_at: new Date(c.updated_at),
-          messages: c.messages.map((m: any) => ({
-            id: Date.now() + Math.random(),
-            conversation_id: 0,
-            ...m,
-            timestamp: new Date(m.timestamp),
-          })),
-        })
-      );
-      setModels(importedData.models);
-      setConversations(newConversations);
+
+      setModels(parsedData.models);
+      setConversations(parsedData.conversations);
+      setLocalOnlyConversations([]);
+      toast({
+        title: "Import Successful",
+        description: "Your data has been imported.",
+      });
+
     } catch (error: any) {
       console.error("Import error:", error);
-      throw new Error(
-        error.message || "An unknown error occurred during import."
-      );
+      toast({
+        title: "Import Failed",
+        description: error.message || "An unknown error occurred during import.",
+        variant: "destructive",
+      });
     } finally {
       setSyncing(false);
     }
+  };
+
+  const resolveImportConflicts = (
+    resolvedData: ParsedImportData,
+    localOnlyConversationIds: Set<number>
+  ) => {
+    const syncedConversations: Conversation[] = [];
+    const localConversations: Conversation[] = [];
+
+    resolvedData.conversations.forEach(convo => {
+      if (localOnlyConversationIds.has(convo.id)) {
+        localConversations.push({ ...convo, is_local_only: true });
+      } else {
+        syncedConversations.push(convo);
+      }
+    });
+
+    setModels(resolvedData.models);
+    setConversations(prev => [...prev, ...syncedConversations]);
+    setLocalOnlyConversations(prev => [...prev, ...localConversations]);
+
+    toast({
+      title: "Import Complete",
+      description: "Conflicts resolved and data has been imported.",
+    });
   };
 
   const value = {
@@ -937,6 +997,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     unlock,
     handleExportData,
     handleImportData,
+    resolveImportConflicts,
     setConversations,
     setModels,
   };

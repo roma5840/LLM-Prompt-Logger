@@ -40,6 +40,8 @@ import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Model } from '@/lib/types'
 import { Label } from '@/components/ui/label'
+import { ImportConflictResolver } from '@/components/ImportConflictResolver';
+import { ImportConflict, ParsedImportData } from '@/lib/types';
 
 const MODEL_NAME_MAX_LENGTH = 80;
 const MODEL_LIMIT = 10;
@@ -58,6 +60,10 @@ export default function SettingsPage() {
   const [isMigrateDialogOpen, setIsMigrateDialogOpen] = useState(false)
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
   const [isLinkConfirmationOpen, setIsLinkConfirmationOpen] = useState(false);
+
+  const [conflicts, setConflicts] = useState<ImportConflict[]>([]);
+  const [conflictedImportData, setConflictedImportData] = useState<ParsedImportData | null>(null);
+  const [isConflictModalOpen, setIsConflictModalOpen] = useState(false);
   
   useEffect(() => {
     setEditableModels(JSON.parse(JSON.stringify(data.models)));
@@ -260,25 +266,44 @@ export default function SettingsPage() {
 
   const handleImport = async () => {
     if (!fileToImport) return;
-    try {
-        await data.handleImportData(fileToImport);
-        toast({
-            title: "Import Successful",
-            description: "Your data has been imported.",
-        });
-        setIsImportDialogOpen(false);
-    } catch (error: any) {
-        toast({
-            title: "Import Failed",
-            description: error.message,
-            variant: "destructive",
-        });
-    } finally {
-        const fileInput = document.getElementById('import-file-input') as HTMLInputElement;
-        if (fileInput) fileInput.value = '';
-        setFileToImport(null);
-    }
-  }
+    
+    const handleConflict = (
+      foundConflicts: ImportConflict[],
+      parsedData: ParsedImportData
+    ) => {
+      setConflicts(foundConflicts);
+      setConflictedImportData(parsedData);
+      setIsConflictModalOpen(true);
+      setIsImportDialogOpen(false);
+    };
+
+    await data.handleImportData(fileToImport, handleConflict);
+    
+    const fileInput = document.getElementById('import-file-input') as HTMLInputElement;
+    if (fileInput) fileInput.value = '';
+    setFileToImport(null);
+  };
+
+  const handleResolve = (
+    resolvedData: ParsedImportData,
+    localOnlyConversationIds: Set<number>
+  ) => {
+    data.resolveImportConflicts(resolvedData, localOnlyConversationIds);
+    setIsConflictModalOpen(false);
+    setConflicts([]);
+    setConflictedImportData(null);
+  };
+
+  const handleCancelConflict = () => {
+    setIsConflictModalOpen(false);
+    setConflicts([]);
+    setConflictedImportData(null);
+    toast({
+      title: "Import Canceled",
+      description: "The data import was canceled due to unresolved conflicts.",
+    });
+  };
+
   
   const generateQrCode = (text: string, canvas: HTMLCanvasElement) => {
     QRCode.toCanvas(canvas, text, { width: 256 }, error => {
@@ -724,6 +749,15 @@ export default function SettingsPage() {
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {isConflictModalOpen && conflictedImportData && (
+        <ImportConflictResolver
+          isOpen={isConflictModalOpen}
+          conflicts={conflicts}
+          originalData={conflictedImportData}
+          onResolve={handleResolve}
+          onCancel={handleCancelConflict}
+        />
+      )}
     </MainLayout>
   );
 }

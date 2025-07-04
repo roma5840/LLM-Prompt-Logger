@@ -2,8 +2,8 @@ export interface Turn {
   id: number;
   conversation_id: number;
   model: string;
-  role: 'user' | 'assistant'; // We'll primarily use 'assistant' for logged turns
-  content: string; // This is the user's "note" or summary
+  role: 'user' | 'assistant';
+  content: string;
   input_tokens: number | null;
   output_tokens: number | null;
   timestamp: Date;
@@ -25,4 +25,17 @@ export interface Model {
   outputCost: number;
   isCacheEnabled: boolean;
   cacheDiscount: number;
+}
+
+export interface ImportConflict {
+  conversationId: number;
+  conversationTitle: string;
+  turnId: number;
+  turnContent: string;
+  turnTimestamp: Date;
+}
+
+export interface ParsedImportData {
+  models: Model[];
+  conversations: Conversation[];
 }
