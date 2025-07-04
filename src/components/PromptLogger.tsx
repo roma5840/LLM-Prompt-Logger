@@ -79,9 +79,9 @@ export function PromptLogger({ addPrompt, models, onPromptLogged, isSubmitting, 
   }
 
   return (
-    <form onSubmit={handleSubmit} className="grid items-start gap-4 px-4 py-2 sm:px-6">
-      <ScrollArea className="max-h-[calc(80vh-220px)] sm:max-h-96 pr-4">
-        <div className="grid gap-4">
+    <form onSubmit={handleSubmit} className="contents">
+      <ScrollArea className="max-h-[calc(80vh-250px)] sm:max-h-[420px] -mx-6 px-6">
+        <div className="grid gap-4 pt-2 pb-4">
           <div className="grid gap-2">
             <Select onValueChange={setSelectedModel} value={selectedModel} disabled={isSubmitting}>
               <SelectTrigger>
@@ -167,10 +167,12 @@ export function PromptLogger({ addPrompt, models, onPromptLogged, isSubmitting, 
           </Collapsible>
         </div>
       </ScrollArea>
-      <Button type="submit" disabled={isSubmitting || !note || !selectedModel}>
-        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-        Log Prompt
-      </Button>
+      <div className="-mx-6 -mb-6 px-6 pt-4 pb-6 border-t">
+        <Button type="submit" disabled={isSubmitting || !note || !selectedModel} className="w-full">
+          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Log Prompt
+        </Button>
+      </div>
     </form>
   )
 }
