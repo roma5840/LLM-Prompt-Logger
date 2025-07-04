@@ -61,9 +61,11 @@ export default function FaqPage() {
             <Accordion type="single" collapsible className="w-full">
               {faqData.map((item, index) => (
                 <AccordionItem key={index} value={`item-${index}`}>
-                  <AccordionTrigger>{item.question}</AccordionTrigger>
+                  <AccordionTrigger>
+                    <span className="text-left">{item.question}</span>
+                  </AccordionTrigger>
                   <AccordionContent className="whitespace-pre-line text-muted-foreground">
-                    {item.answer}
+                    <p className="text-left">{item.answer}</p>
                   </AccordionContent>
                 </AccordionItem>
               ))}
