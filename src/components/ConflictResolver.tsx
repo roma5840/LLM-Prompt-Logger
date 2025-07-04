@@ -46,15 +46,36 @@ export function ConflictResolver({ isOpen, conflicts, onResolve, onCancel, mode 
   const allResolved = useMemo(() => resolvedCount === conflicts.length, [resolvedCount, conflicts.length])
 
   const setResolution = (conflict: ImportConflict, choice: ResolutionChoice, content?: string) => {
-    setResolutions(prev => ({
-      ...prev,
-      [conflict.turnId]: { 
-        choice, 
-        content: content ?? conflict.turnContent,
-        conversationId: conflict.conversationId
-      }
-    }))
-  }
+    if (choice === 'keep_local') {
+      const conversationId = conflict.conversationId;
+      const newResolutionsForConvo: Record<number, Resolution> = {};
+
+      conflicts.forEach(c => {
+        if (c.conversationId === conversationId) {
+          newResolutionsForConvo[c.turnId] = {
+            choice: 'keep_local',
+            content: c.turnContent,
+            conversationId: c.conversationId,
+          };
+        }
+      });
+
+      setResolutions(prev => ({
+        ...prev,
+        ...newResolutionsForConvo,
+      }));
+    } else {
+      // 'edit' choice
+      setResolutions(prev => ({
+        ...prev,
+        [conflict.turnId]: {
+          choice,
+          content: content ?? conflict.turnContent,
+          conversationId: conflict.conversationId,
+        },
+      }));
+    }
+  };
 
   const handleComplete = () => {
     onResolve(resolutions);
@@ -142,41 +163,5 @@ export function ConflictResolver({ isOpen, conflicts, onResolve, onCancel, mode 
         />
       )}
     </>
-  )
-}
-
-function EditConflictModal({ conflict, onSave, onClose }: { conflict: ImportConflict, onSave: (conflict: ImportConflict, content: string) => void, onClose: () => void }) {
-  const [content, setContent] = useState(conflict.turnContent)
-  const isUnderLimit = content.length <= NOTE_CHAR_LIMIT
-
-  return (
-    <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Edit Note to Fit</DialogTitle>
-          <DialogDescription>Reduce the note content to {NOTE_CHAR_LIMIT} characters or less to sync it.</DialogDescription>
-        </DialogHeader>
-        <div className="my-4">
-          <Textarea
-            value={content}
-            onChange={e => setContent(e.target.value)}
-            rows={12}
-            className="text-xs"
-          />
-          <div className={cn(
-            "text-right text-sm mt-2",
-            isUnderLimit ? "text-muted-foreground" : "text-destructive font-semibold"
-          )}>
-            {content.length.toLocaleString()} / {NOTE_CHAR_LIMIT.toLocaleString()}
-          </div>
-        </div>
-        <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button onClick={() => onSave(conflict, content)} disabled={!isUnderLimit}>
-                Save and Sync
-            </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
   )
 }

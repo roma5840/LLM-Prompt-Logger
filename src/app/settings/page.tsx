@@ -282,11 +282,12 @@ export default function SettingsPage() {
     setFileToImport(null);
   };
   
-  const handleResolve = (resolutions: Record<number, Resolution>) => {
+  const handleResolve = async (resolutions: Record<number, Resolution>) => {
     if (conflictedImportData) {
       data.resolveImportConflicts(conflictedImportData, resolutions);
     } else {
-      data.resolveMigrationConflicts(resolutions);
+      await data.resolveMigrationConflicts(resolutions, masterPassword);
+      setIsMigrateDialogOpen(false);
     }
 
     setIsConflictModalOpen(false);

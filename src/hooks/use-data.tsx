@@ -78,8 +78,9 @@ interface DataContextType {
     resolutions: Record<number, Resolution>
   ) => void;
   resolveMigrationConflicts: (
-    resolutions: Record<number, Resolution>
-  ) => void;
+    resolutions: Record<number, Resolution>,
+    password: string
+  ) => Promise<void>;
   setConversations: React.Dispatch<React.SetStateAction<Conversation[]>>;
   setModels: React.Dispatch<React.SetStateAction<Model[]>>;
 }
@@ -476,107 +477,119 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     return conflicts;
   };
 
+  const _performSyncMigration = async (
+    password: string,
+    conversationsToSync: Conversation[],
+    modelsToSync: Model[]
+  ) => {
+    const salt = window.btoa(
+      String.fromCharCode.apply(
+        null,
+        Array.from(window.crypto.getRandomValues(new Uint8Array(16)))
+      )
+    );
+    const derivedKey = await deriveEncryptionKey(password, salt);
+    const verificationHash = await encrypt(VERIFICATION_STRING, derivedKey);
+    const newAccessToken = await getAccessToken(password, salt);
+    const accessTokenHash = await hashAccessToken(newAccessToken);
+
+    const { data: newKey, error: createError } = await supabase.rpc(
+      "create_new_bucket",
+      {
+        p_models: modelsToSync,
+        p_salt: salt,
+        p_verification_hash: verificationHash,
+        p_access_token_hash: accessTokenHash,
+      }
+    );
+    if (createError || !newKey)
+      throw new Error("Could not create a cloud account. Please try again.");
+
+    if (conversationsToSync.length > 0) {
+      const encryptedPayload = await Promise.all(
+        conversationsToSync.map(async (c) => ({
+          title: await encrypt(c.title, derivedKey),
+          created_at: c.created_at.toISOString(),
+          updated_at: c.updated_at.toISOString(),
+          messages: await Promise.all(
+            c.messages.map(async (m) => ({
+              model: m.model,
+              role: m.role,
+              content: await encrypt(m.content, derivedKey),
+              input_tokens:
+                m.input_tokens !== null
+                  ? await encrypt(String(m.input_tokens), derivedKey)
+                  : null,
+              output_tokens:
+                m.output_tokens !== null
+                  ? await encrypt(String(m.output_tokens), derivedKey)
+                  : null,
+              timestamp: m.timestamp.toISOString(),
+            }))
+          ),
+        }))
+      );
+
+      const { error: batchError } = await supabase.rpc(
+        "batch_add_conversations",
+        {
+          p_bucket_id: newKey,
+          p_access_token: newAccessToken,
+          p_conversations_jsonb: encryptedPayload,
+        }
+      );
+
+      if (batchError) {
+        await supabase.rpc("delete_my_account", {
+          p_bucket_id: newKey,
+          p_access_token: newAccessToken,
+        });
+        throw new Error(`Failed to upload local data: ${batchError.message}`);
+      }
+    }
+
+    localStorage.setItem(SYNC_KEY_STORAGE, newKey);
+    localStorage.setItem(SALT_STORAGE, salt);
+    localStorage.setItem(SESSION_MASTER_PASSWORD_STORAGE, password);
+    localStorage.removeItem(LOCAL_HISTORY_STORAGE);
+
+    setSyncKey(newKey);
+    setEncryptionKey(derivedKey);
+    setMasterPassword(password);
+    setIsLocked(false);
+    setConversations([]); // Clear out old local-only state
+    await refreshDataFromSupabase(newKey, derivedKey);
+  };
+
   const enableSyncAndMigrateData = async (
     password: string,
     onConflict: (conflicts: ImportConflict[]) => void
   ) => {
     setSyncing(true);
-    let syncHandled = false;
     try {
       const localConversationsToMigrate = conversationsRef.current;
-
       const conflicts = findConflictsInConversations(
         localConversationsToMigrate
       );
       if (conflicts.length > 0) {
         onConflict(conflicts);
-        syncHandled = true; // Handed off to resolver
         return;
       }
 
       const localModels = modelsRef.current;
-      const salt = window.btoa(
-        String.fromCharCode.apply(
-          null,
-          Array.from(window.crypto.getRandomValues(new Uint8Array(16)))
-        )
+      await _performSyncMigration(
+        password,
+        localConversationsToMigrate,
+        localModels
       );
-      const derivedKey = await deriveEncryptionKey(password, salt);
-      const verificationHash = await encrypt(VERIFICATION_STRING, derivedKey);
-      const newAccessToken = await getAccessToken(password, salt);
-      const accessTokenHash = await hashAccessToken(newAccessToken);
-
-      const { data: newKey, error: createError } = await supabase.rpc(
-        "create_new_bucket",
-        {
-          p_models: localModels,
-          p_salt: salt,
-          p_verification_hash: verificationHash,
-          p_access_token_hash: accessTokenHash,
-        }
-      );
-      if (createError || !newKey)
-        throw new Error("Could not create a cloud account. Please try again.");
-
-      if (localConversationsToMigrate.length > 0) {
-        const encryptedPayload = await Promise.all(
-          localConversationsToMigrate.map(async (c) => ({
-            title: await encrypt(c.title, derivedKey),
-            created_at: c.created_at.toISOString(),
-            updated_at: c.updated_at.toISOString(),
-            messages: await Promise.all(
-              c.messages.map(async (m) => ({
-                model: m.model,
-                role: m.role,
-                content: await encrypt(m.content, derivedKey),
-                input_tokens:
-                  m.input_tokens !== null
-                    ? await encrypt(String(m.input_tokens), derivedKey)
-                    : null,
-                output_tokens:
-                  m.output_tokens !== null
-                    ? await encrypt(String(m.output_tokens), derivedKey)
-                    : null,
-                timestamp: m.timestamp.toISOString(),
-              }))
-            ),
-          }))
-        );
-
-        const { error: batchError } = await supabase.rpc(
-          "batch_add_conversations",
-          {
-            p_bucket_id: newKey,
-            p_access_token: newAccessToken,
-            p_conversations_jsonb: encryptedPayload,
-          }
-        );
-
-        if (batchError) {
-          await supabase.rpc("delete_my_account", {
-            p_bucket_id: newKey,
-            p_access_token: newAccessToken,
-          });
-          throw new Error(`Failed to upload local data: ${batchError.message}`);
-        }
-      }
-
-      localStorage.setItem(SYNC_KEY_STORAGE, newKey);
-      localStorage.setItem(SALT_STORAGE, salt);
-      localStorage.setItem(SESSION_MASTER_PASSWORD_STORAGE, password);
-      localStorage.removeItem(LOCAL_HISTORY_STORAGE);
-
-      setSyncKey(newKey);
-      setEncryptionKey(derivedKey);
-      setMasterPassword(password);
-      setIsLocked(false);
-      setConversations([]);
-      await refreshDataFromSupabase(newKey, derivedKey);
-      syncHandled = true;
+    } catch (e: any) {
+      toast({
+        title: "Error Enabling Sync",
+        description: e.message,
+        variant: "destructive",
+      });
     } finally {
-      if (syncHandled) {
-        setSyncing(false);
-      }
+      setSyncing(false);
     }
   };
 
@@ -1044,46 +1057,68 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     });
   };
 
-  const resolveMigrationConflicts = (
-    resolutions: Record<number, Resolution>
+  const resolveMigrationConflicts = async (
+    resolutions: Record<number, Resolution>,
+    password: string
   ) => {
-    const localOnlyConversationIds = new Set<number>();
-    const conversationsToUpdate: Conversation[] = JSON.parse(
-      JSON.stringify(conversationsRef.current)
-    );
+    setSyncing(true);
+    try {
+      const localOnlyConversationIds = new Set<number>();
+      const conversationsToUpdate: Conversation[] = JSON.parse(
+        JSON.stringify(conversationsRef.current)
+      );
 
-    Object.entries(resolutions).forEach(([turnIdStr, res]) => {
-      const turnId = Number(turnIdStr);
-      if (res.choice === "keep_local") {
-        localOnlyConversationIds.add(res.conversationId);
-      } else if (res.choice === "edit") {
-        const convoToUpdate = conversationsToUpdate.find(
-          (c) => c.id === res.conversationId
-        );
-        if (convoToUpdate) {
-          const turnToUpdate = convoToUpdate.messages.find(
-            (t) => t.id === turnId
+      Object.entries(resolutions).forEach(([turnIdStr, res]) => {
+        const turnId = Number(turnIdStr);
+        if (res.choice === "keep_local") {
+          localOnlyConversationIds.add(res.conversationId);
+        } else if (res.choice === "edit") {
+          const convoToUpdate = conversationsToUpdate.find(
+            (c) => c.id === res.conversationId
           );
-          if (turnToUpdate) turnToUpdate.content = res.content;
+          if (convoToUpdate) {
+            const turnToUpdate = convoToUpdate.messages.find(
+              (t) => t.id === turnId
+            );
+            if (turnToUpdate) turnToUpdate.content = res.content;
+          }
         }
-      }
-    });
+      });
 
-    const finalConversationsForSync = conversationsToUpdate.filter(
-      (c) => !localOnlyConversationIds.has(c.id)
-    );
-    const finalLocalOnlyConversations = conversationsToUpdate
-      .filter((c) => localOnlyConversationIds.has(c.id))
-      .map((c) => ({ ...c, is_local_only: true }));
+      const finalConversationsForSync = conversationsToUpdate.filter(
+        (c) => !localOnlyConversationIds.has(c.id)
+      );
+      const finalLocalOnlyConversations = conversationsToUpdate
+        .filter((c) => localOnlyConversationIds.has(c.id))
+        .map((c) => ({ ...c, is_local_only: true }));
 
-    setConversations(finalConversationsForSync);
-    setLocalOnlyConversations((prev) => [...prev, ...finalLocalOnlyConversations]);
+      setLocalOnlyConversations((prev) => [
+        ...prev,
+        ...finalLocalOnlyConversations,
+      ]);
 
-    toast({
-      title: "Conflicts Resolved",
-      description:
-        "Your local data has been updated. You can now try enabling sync again.",
-    });
+      const modelsToSync = modelsRef.current;
+      await _performSyncMigration(
+        password,
+        finalConversationsForSync,
+        modelsToSync
+      );
+
+      toast({
+        title: "Sync Enabled",
+        description: "Your data has been successfully encrypted and synced.",
+      });
+    } catch (e: any) {
+      toast({
+        title: "Error Enabling Sync",
+        description: e.message,
+        variant: "destructive",
+      });
+      // Re-throw to allow UI to handle it if necessary
+      throw e;
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const value = {
