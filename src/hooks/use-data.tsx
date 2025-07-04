@@ -37,6 +37,7 @@ import {
   encrypt,
   decrypt,
 } from "@/lib/crypto";
+import { Resolution } from "@/components/ConflictResolver";
 
 interface DataContextType {
   conversations: Conversation[];
@@ -56,13 +57,29 @@ interface DataContextType {
   deleteAllData: () => Promise<void>;
   deleteAccount: () => Promise<void>;
   updateUserModels: (newModels: Model[]) => Promise<void>;
-  enableSyncAndMigrateData: (password: string) => Promise<void>; // RESTORED
+  enableSyncAndMigrateData: (
+    password: string,
+    onConflict: (conflicts: ImportConflict[]) => void
+  ) => Promise<void>;
   linkDeviceWithKey: (key: string, password: string) => Promise<void>;
   unlinkDevice: () => void;
   lock: () => void;
   unlock: (password: string) => Promise<void>;
   handleExportData: () => Promise<void>;
-  handleImportData: (file: File) => Promise<void>;
+  handleImportData: (
+    file: File,
+    onConflict: (
+      conflicts: ImportConflict[],
+      parsedData: ParsedImportData
+    ) => void
+  ) => Promise<void>;
+  resolveImportConflicts: (
+    resolvedData: ParsedImportData,
+    resolutions: Record<number, Resolution>
+  ) => void;
+  resolveMigrationConflicts: (
+    resolutions: Record<number, Resolution>
+  ) => void;
   setConversations: React.Dispatch<React.SetStateAction<Conversation[]>>;
   setModels: React.Dispatch<React.SetStateAction<Model[]>>;
 }
@@ -436,13 +453,48 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [syncKey, encryptionKey, isLocked, refreshDataFromSupabase, unlinkDevice]);
 
-  const enableSyncAndMigrateData = async (password: string) => {
+  const findConflictsInConversations = (
+    convos: Conversation[]
+  ): ImportConflict[] => {
+    const conflicts: ImportConflict[] = [];
+    // Use the hardcoded limit here as this function is called before syncKey is set
+    const limit = NOTE_CHAR_LIMIT;
+
+    convos.forEach((convo) => {
+      convo.messages.forEach((turn) => {
+        if (turn.content && turn.content.length > limit) {
+          conflicts.push({
+            conversationId: convo.id,
+            conversationTitle: convo.title,
+            turnId: turn.id,
+            turnContent: turn.content,
+            turnTimestamp: turn.timestamp,
+          });
+        }
+      });
+    });
+    return conflicts;
+  };
+
+  const enableSyncAndMigrateData = async (
+    password: string,
+    onConflict: (conflicts: ImportConflict[]) => void
+  ) => {
     setSyncing(true);
+    let syncHandled = false;
     try {
       const localConversationsToMigrate = conversationsRef.current;
-      const localModels = modelsRef.current;
 
-      // 1. Generate crypto materials
+      const conflicts = findConflictsInConversations(
+        localConversationsToMigrate
+      );
+      if (conflicts.length > 0) {
+        onConflict(conflicts);
+        syncHandled = true; // Handed off to resolver
+        return;
+      }
+
+      const localModels = modelsRef.current;
       const salt = window.btoa(
         String.fromCharCode.apply(
           null,
@@ -454,7 +506,6 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       const newAccessToken = await getAccessToken(password, salt);
       const accessTokenHash = await hashAccessToken(newAccessToken);
 
-      // 2. Create the cloud bucket
       const { data: newKey, error: createError } = await supabase.rpc(
         "create_new_bucket",
         {
@@ -467,7 +518,6 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       if (createError || !newKey)
         throw new Error("Could not create a cloud account. Please try again.");
 
-      // 3. Encrypt and batch upload existing local data
       if (localConversationsToMigrate.length > 0) {
         const encryptedPayload = await Promise.all(
           localConversationsToMigrate.map(async (c) => ({
@@ -503,7 +553,6 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         );
 
         if (batchError) {
-          // Attempt to clean up the partially created account
           await supabase.rpc("delete_my_account", {
             p_bucket_id: newKey,
             p_access_token: newAccessToken,
@@ -512,7 +561,6 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         }
       }
 
-      // 4. Finalize: update local state and storage
       localStorage.setItem(SYNC_KEY_STORAGE, newKey);
       localStorage.setItem(SALT_STORAGE, salt);
       localStorage.setItem(SESSION_MASTER_PASSWORD_STORAGE, password);
@@ -522,10 +570,13 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       setEncryptionKey(derivedKey);
       setMasterPassword(password);
       setIsLocked(false);
-      setConversations([]); // Clear local state, will be repopulated by refresh
+      setConversations([]);
       await refreshDataFromSupabase(newKey, derivedKey);
+      syncHandled = true;
     } finally {
-      setSyncing(false);
+      if (syncHandled) {
+        setSyncing(false);
+      }
     }
   };
 
@@ -654,25 +705,26 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
     const originalConversations = conversations;
     setConversations((prev) => prev.filter((c) => c.id !== id));
-    
+
     if (syncKey) {
       try {
         if (!encryptionKey || !masterPassword) throw new Error("App is locked.");
         const salt = localStorage.getItem(SALT_STORAGE);
         if (!salt) throw new Error("Salt not found.");
         const token = await getAccessToken(masterPassword, salt);
+
         const { error } = await supabase.rpc("delete_conversation", {
           p_bucket_id: syncKey,
           p_conversation_id: id,
           p_access_token: token,
         });
+
         if (error) {
           throw error;
         }
 
         await broadcastChange("data_changed");
         router.push("/");
-        
       } catch (error) {
         setConversations(originalConversations);
         toast({
@@ -682,7 +734,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         });
       }
     } else {
-        router.push("/");
+      router.push("/");
     }
   };
 
@@ -742,7 +794,6 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
       setConversations([]);
       await broadcastChange("data_changed");
-
     } else {
       setConversations([]);
     }
@@ -868,7 +919,10 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   const handleImportData = async (
     file: File,
-    onConflict: (conflicts: ImportConflict[], parsedData: ParsedImportData) => void
+    onConflict: (
+      conflicts: ImportConflict[],
+      parsedData: ParsedImportData
+    ) => void
   ) => {
     if (isLocked) {
       toast({
@@ -879,6 +933,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     setSyncing(true);
+    let importHandled = false;
     try {
       const text = await file.text();
       const rawData = JSON.parse(text);
@@ -887,77 +942,91 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         !Array.isArray(rawData.conversations) ||
         !Array.isArray(rawData.models)
       ) {
-        throw new Error("Invalid file format.");
+        throw new Error(
+          "Invalid file format: 'conversations' and 'models' arrays are required."
+        );
       }
 
       const parsedData: ParsedImportData = {
         models: rawData.models,
-        conversations: rawData.conversations.map(
-          (c: any, index: number) => ({
-            id: c.id || Date.now() + index,
-            title: c.title,
-            created_at: new Date(c.created_at),
-            updated_at: new Date(c.updated_at),
-            messages: c.messages.map((m: any, msgIndex: number) => ({
-              id: m.id || Date.now() + index + msgIndex,
-              conversation_id: c.id,
-              ...m,
-              timestamp: new Date(m.timestamp),
-            })),
-          })
-        ),
+        conversations: rawData.conversations.map((c: any, index: number) => ({
+          id: c.id || Date.now() + index,
+          title: c.title,
+          created_at: new Date(c.created_at),
+          updated_at: new Date(c.updated_at),
+          messages: c.messages.map((m: any, msgIndex: number) => ({
+            id: m.id || Date.now() + index + msgIndex,
+            conversation_id: c.id,
+            ...m,
+            timestamp: new Date(m.timestamp),
+          })),
+        })),
       };
 
-      if (syncKey && noteCharacterLimit) {
-        const conflicts: ImportConflict[] = [];
-        parsedData.conversations.forEach(convo => {
-          convo.messages.forEach(turn => {
-            if (turn.content && turn.content.length > noteCharacterLimit) {
-              conflicts.push({
-                conversationId: convo.id,
-                conversationTitle: convo.title,
-                turnId: turn.id,
-                turnContent: turn.content,
-                turnTimestamp: turn.timestamp,
-              });
-            }
-          });
-        });
-
+      if (syncKey) {
+        const conflicts = findConflictsInConversations(parsedData.conversations);
         if (conflicts.length > 0) {
           onConflict(conflicts, parsedData);
+          importHandled = true; // Handed off to resolver
           return;
         }
       }
 
       setModels(parsedData.models);
-      setConversations(parsedData.conversations);
-      setLocalOnlyConversations([]);
+      setConversations((prev) => [...prev, ...parsedData.conversations]);
       toast({
         title: "Import Successful",
         description: "Your data has been imported.",
       });
-
+      importHandled = true;
     } catch (error: any) {
       console.error("Import error:", error);
       toast({
         title: "Import Failed",
-        description: error.message || "An unknown error occurred during import.",
+        description: `Reason: ${
+          error.message || "An unknown error occurred during import."
+        }`,
         variant: "destructive",
       });
     } finally {
-      setSyncing(false);
+      if (importHandled) {
+        setSyncing(false);
+      }
     }
   };
 
   const resolveImportConflicts = (
     resolvedData: ParsedImportData,
-    localOnlyConversationIds: Set<number>
+    resolutions: Record<number, Resolution>
   ) => {
+    const localOnlyConversationIds = new Set<number>();
+    Object.values(resolutions).forEach((res) => {
+      if (res.choice === "keep_local") {
+        localOnlyConversationIds.add(res.conversationId);
+      } else if (res.choice === "edit") {
+        const convoToUpdate = resolvedData.conversations.find(
+          (c) => c.id === res.conversationId
+        );
+        if (convoToUpdate) {
+          const turnIdToUpdate = Number(
+            Object.keys(resolutions).find(
+              (key) => resolutions[Number(key)] === res
+            )
+          );
+          const turnToUpdate = convoToUpdate.messages.find(
+            (t) => t.id === turnIdToUpdate
+          );
+          if (turnToUpdate) {
+            turnToUpdate.content = res.content;
+          }
+        }
+      }
+    });
+
     const syncedConversations: Conversation[] = [];
     const localConversations: Conversation[] = [];
 
-    resolvedData.conversations.forEach(convo => {
+    resolvedData.conversations.forEach((convo) => {
       if (localOnlyConversationIds.has(convo.id)) {
         localConversations.push({ ...convo, is_local_only: true });
       } else {
@@ -966,12 +1035,54 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     });
 
     setModels(resolvedData.models);
-    setConversations(prev => [...prev, ...syncedConversations]);
-    setLocalOnlyConversations(prev => [...prev, ...localConversations]);
+    setConversations((prev) => [...prev, ...syncedConversations]);
+    setLocalOnlyConversations((prev) => [...prev, ...localConversations]);
 
     toast({
       title: "Import Complete",
       description: "Conflicts resolved and data has been imported.",
+    });
+  };
+
+  const resolveMigrationConflicts = (
+    resolutions: Record<number, Resolution>
+  ) => {
+    const localOnlyConversationIds = new Set<number>();
+    const conversationsToUpdate: Conversation[] = JSON.parse(
+      JSON.stringify(conversationsRef.current)
+    );
+
+    Object.entries(resolutions).forEach(([turnIdStr, res]) => {
+      const turnId = Number(turnIdStr);
+      if (res.choice === "keep_local") {
+        localOnlyConversationIds.add(res.conversationId);
+      } else if (res.choice === "edit") {
+        const convoToUpdate = conversationsToUpdate.find(
+          (c) => c.id === res.conversationId
+        );
+        if (convoToUpdate) {
+          const turnToUpdate = convoToUpdate.messages.find(
+            (t) => t.id === turnId
+          );
+          if (turnToUpdate) turnToUpdate.content = res.content;
+        }
+      }
+    });
+
+    const finalConversationsForSync = conversationsToUpdate.filter(
+      (c) => !localOnlyConversationIds.has(c.id)
+    );
+    const finalLocalOnlyConversations = conversationsToUpdate
+      .filter((c) => localOnlyConversationIds.has(c.id))
+      .map((c) => ({ ...c, is_local_only: true }));
+
+    setConversations(finalConversationsForSync);
+    setLocalOnlyConversations((prev) => [...prev, ...finalLocalOnlyConversations]);
+
+    toast({
+      title: "Conflicts Resolved",
+      description:
+        "Your local data has been updated. You can now try enabling sync again.",
     });
   };
 
@@ -998,6 +1109,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     handleExportData,
     handleImportData,
     resolveImportConflicts,
+    resolveMigrationConflicts,
     setConversations,
     setModels,
   };

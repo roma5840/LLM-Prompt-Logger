@@ -38,10 +38,9 @@ import { Loader2, AlertTriangle, ShieldCheck, ShieldOff, Info, Trash2, Save, Rot
 import { cn } from '@/lib/utils'
 import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Model } from '@/lib/types'
+import { Model, ImportConflict, ParsedImportData } from '@/lib/types'
 import { Label } from '@/components/ui/label'
-import { ImportConflictResolver } from '@/components/ImportConflictResolver';
-import { ImportConflict, ParsedImportData } from '@/lib/types';
+import { ConflictResolver, Resolution } from '@/components/ConflictResolver'
 
 const MODEL_NAME_MAX_LENGTH = 80;
 const MODEL_LIMIT = 10;
@@ -199,17 +198,16 @@ export default function SettingsPage() {
       return;
     }
     
-    try {
-      await data.enableSyncAndMigrateData(masterPassword);
-      toast({
-        title: "Success!",
-        description: "Cloud sync has been enabled and your local data has been migrated.",
-      });
+    const handleConflict = (foundConflicts: ImportConflict[]) => {
+      setConflictedImportData(null); 
+      setConflicts(foundConflicts);
+      setIsConflictModalOpen(true);
       setIsMigrateDialogOpen(false);
-      setMasterPassword('');
-    } catch (error: any) {
+    };
+
+    await data.enableSyncAndMigrateData(masterPassword, handleConflict).catch(error => {
       toast({ title: "Error Enabling Sync", description: error.message, variant: "destructive" });
-    }
+    });
   };
 
   const executeLinkDevice = async () => {
@@ -283,12 +281,14 @@ export default function SettingsPage() {
     if (fileInput) fileInput.value = '';
     setFileToImport(null);
   };
+  
+  const handleResolve = (resolutions: Record<number, Resolution>) => {
+    if (conflictedImportData) {
+      data.resolveImportConflicts(conflictedImportData, resolutions);
+    } else {
+      data.resolveMigrationConflicts(resolutions);
+    }
 
-  const handleResolve = (
-    resolvedData: ParsedImportData,
-    localOnlyConversationIds: Set<number>
-  ) => {
-    data.resolveImportConflicts(resolvedData, localOnlyConversationIds);
     setIsConflictModalOpen(false);
     setConflicts([]);
     setConflictedImportData(null);
@@ -299,12 +299,11 @@ export default function SettingsPage() {
     setConflicts([]);
     setConflictedImportData(null);
     toast({
-      title: "Import Canceled",
-      description: "The data import was canceled due to unresolved conflicts.",
+      title: "Operation Canceled",
+      description: "The sync or import process was canceled.",
     });
   };
 
-  
   const generateQrCode = (text: string, canvas: HTMLCanvasElement) => {
     QRCode.toCanvas(canvas, text, { width: 256 }, error => {
       if (error) console.error(error)
@@ -723,18 +722,30 @@ export default function SettingsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm Data Import</AlertDialogTitle>
             <AlertDialogDescription>
-              {data.syncKey ? 'Importing into a synced account is not currently supported. Please unlink this device first.' : 'This will overwrite all your local data with the contents of this file. This action cannot be undone.'}
+              {data.syncKey ? 'Importing will check for conflicts with sync limits. ' : ''}
+              This will merge the imported data with your current data. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={data.syncing} onClick={() => setIsImportDialogOpen(false)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleImport} disabled={data.syncing || !!data.syncKey}>
+            <AlertDialogAction onClick={handleImport} disabled={data.syncing}>
                 {data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Import
+                Import & Check
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {isConflictModalOpen && (
+        <ConflictResolver
+          isOpen={isConflictModalOpen}
+          conflicts={conflicts}
+          onResolve={handleResolve}
+          onCancel={handleCancelConflict}
+          mode={conflictedImportData ? 'import' : 'migration'}
+        />
+      )}
+
       <AlertDialog open={isLinkConfirmationOpen} onOpenChange={setIsLinkConfirmationOpen}>
         <AlertDialogContent>
             <AlertDialogHeader>
@@ -749,15 +760,6 @@ export default function SettingsPage() {
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      {isConflictModalOpen && conflictedImportData && (
-        <ImportConflictResolver
-          isOpen={isConflictModalOpen}
-          conflicts={conflicts}
-          originalData={conflictedImportData}
-          onResolve={handleResolve}
-          onCancel={handleCancelConflict}
-        />
-      )}
     </MainLayout>
   );
 }

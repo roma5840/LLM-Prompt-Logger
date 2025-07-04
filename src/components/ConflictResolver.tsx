@@ -1,8 +1,8 @@
-// src/components/ImportConflictResolver.tsx
+// src/components/ConflictResolver.tsx
 'use client'
 
 import { useState, useMemo } from 'react'
-import { ImportConflict, ParsedImportData } from '@/lib/types'
+import { ImportConflict } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -14,21 +14,31 @@ import { NOTE_CHAR_LIMIT } from '@/lib/constants'
 import { Pencil, Shield, CheckCircle2 } from 'lucide-react'
 
 type ResolutionChoice = 'edit' | 'keep_local'
-interface Resolution {
+export interface Resolution {
   choice: ResolutionChoice;
   content: string;
   conversationId: number;
 }
 
-interface ImportConflictResolverProps {
+interface ConflictResolverProps {
   isOpen: boolean
   conflicts: ImportConflict[]
-  originalData: ParsedImportData
-  onResolve: (resolvedData: ParsedImportData, localOnlyConversationIds: Set<number>) => void
+  onResolve: (resolutions: Record<number, Resolution>) => void
   onCancel: () => void
+  mode: 'import' | 'migration'
 }
 
-export function ImportConflictResolver({ isOpen, conflicts, originalData, onResolve, onCancel }: ImportConflictResolverProps) {
+const titles = {
+  import: "Resolve Import Conflicts",
+  migration: "Resolve Sync Conflicts"
+}
+
+const descriptions = {
+  import: `Your import file contains ${'COUNT'} turn(s) with notes longer than the sync limit of ${NOTE_CHAR_LIMIT} characters. To proceed, please resolve each conflict below.`,
+  migration: `You have ${'COUNT'} local turn(s) with notes longer than the sync limit of ${NOTE_CHAR_LIMIT} characters. To enable cloud sync, please resolve each conflict below.`
+}
+
+export function ConflictResolver({ isOpen, conflicts, onResolve, onCancel, mode }: ConflictResolverProps) {
   const [resolutions, setResolutions] = useState<Record<number, Resolution>>({})
   const [editingConflict, setEditingConflict] = useState<ImportConflict | null>(null)
 
@@ -47,26 +57,7 @@ export function ImportConflictResolver({ isOpen, conflicts, originalData, onReso
   }
 
   const handleComplete = () => {
-    // Create a deep copy to avoid mutating the original data object
-    const resolvedData: ParsedImportData = JSON.parse(JSON.stringify(originalData));
-    const localOnlyConversationIds = new Set<number>();
-
-    Object.values(resolutions).forEach(res => {
-      if (res.choice === 'keep_local') {
-        localOnlyConversationIds.add(res.conversationId);
-      } else if (res.choice === 'edit') {
-        // Find and update the specific turn in our copied data
-        const convoToUpdate = resolvedData.conversations.find(c => c.id === res.conversationId);
-        if (convoToUpdate) {
-          const turnToUpdate = convoToUpdate.messages.find(t => t.id === Number(Object.keys(resolutions).find(key => resolutions[Number(key)] === res)));
-          if (turnToUpdate) {
-            turnToUpdate.content = res.content;
-          }
-        }
-      }
-    });
-
-    onResolve(resolvedData, localOnlyConversationIds);
+    onResolve(resolutions);
   }
 
   const handleEditSave = (conflict: ImportConflict, newContent: string) => {
@@ -79,9 +70,9 @@ export function ImportConflictResolver({ isOpen, conflicts, originalData, onReso
       <Dialog open={isOpen} onOpenChange={() => {}}>
         <DialogContent className="max-w-3xl h-[90vh] flex flex-col p-0">
           <DialogHeader className="p-6 pb-2">
-            <DialogTitle className="text-xl">Resolve Import Conflicts</DialogTitle>
+            <DialogTitle className="text-xl">{titles[mode]}</DialogTitle>
             <DialogDescription>
-              Your import file contains {conflicts.length} turn(s) with notes longer than the sync limit of {NOTE_CHAR_LIMIT} characters. To proceed, please resolve each conflict below.
+              {descriptions[mode].replace('COUNT', String(conflicts.length))}
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 min-h-0 px-6">
@@ -137,8 +128,8 @@ export function ImportConflictResolver({ isOpen, conflicts, originalData, onReso
               {resolvedCount} of {conflicts.length} resolved.
             </p>
             <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={onCancel}>Cancel Import</Button>
-              <Button onClick={handleComplete} disabled={!allResolved}>Complete Import</Button>
+              <Button variant="outline" onClick={onCancel}>Cancel {mode === 'import' ? 'Import' : 'Sync'}</Button>
+              <Button onClick={handleComplete} disabled={!allResolved}>Complete {mode === 'import' ? 'Import' : 'Sync'}</Button>
             </div>
           </div>
         </DialogContent>
