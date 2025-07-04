@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils'
 import { Loader2, ChevronsUpDown } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible'
 import { Label } from './ui/label'
+import { ScrollArea } from './ui/scroll-area'
 
 interface PromptLoggerProps {
   addPrompt: (model: string, note: string, inputTokens: number | null, outputTokens: number | null) => Promise<void>
@@ -79,89 +80,93 @@ export function PromptLogger({ addPrompt, models, onPromptLogged, isSubmitting, 
 
   return (
     <form onSubmit={handleSubmit} className="grid items-start gap-4 px-4 py-2 sm:px-6">
-      <div className="grid gap-2">
-        <Select onValueChange={setSelectedModel} value={selectedModel} disabled={isSubmitting}>
-          <SelectTrigger>
-            <SelectValue placeholder="Select a model" />
-          </SelectTrigger>
-          <SelectContent>
-            {models.map(model => (
-              <SelectItem key={model.name} value={model.name}>
-                {model.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="grid gap-2">
-        <Label htmlFor="prompt-notes">Notes / Tags</Label>
-        <Textarea
-          id="prompt-notes"
-          value={note}
-          onChange={e => setNote(e.target.value)}
-          placeholder="Add any notes, tags, or a summary for this log..."
-          rows={5}
-          maxLength={noteCharacterLimit ?? undefined}
-          disabled={isSubmitting}
-        />
-        <div className={cn(
-            "text-right text-xs",
-            noteCharacterLimit && note.length >= noteCharacterLimit ? "text-red-500" : "text-muted-foreground"
-        )}>
-          {note.length.toLocaleString()}
-          {noteCharacterLimit ? ` / ${noteCharacterLimit.toLocaleString()}` : ' characters'}
-        </div>
-      </div>
-
-      <Collapsible open={isInputOpen} onOpenChange={setIsInputOpen} className="grid gap-2">
-        <div className="flex items-center justify-between -mb-2">
-            <CollapsibleTrigger asChild>
-                <Button variant="ghost" size="sm" className="text-sm px-2 -ml-2">
-                    <ChevronsUpDown className="h-4 w-4 mr-2" />
-                    Add LLM Input (for token count)
-                </Button>
-            </CollapsibleTrigger>
-            {isInputOpen && (
-              <span className="text-xs text-muted-foreground">
-                  ~{inputTokens.toLocaleString()} input tokens
-              </span>
-            )}
-        </div>
-        <CollapsibleContent className="space-y-2 pt-2">
-            <Textarea 
-                placeholder="Paste the original prompt text here to count input tokens..."
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                rows={5}
-                disabled={isSubmitting}
+      <ScrollArea className="max-h-[calc(80vh-220px)] sm:max-h-96 pr-4">
+        <div className="grid gap-4">
+          <div className="grid gap-2">
+            <Select onValueChange={setSelectedModel} value={selectedModel} disabled={isSubmitting}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a model" />
+              </SelectTrigger>
+              <SelectContent>
+                {models.map(model => (
+                  <SelectItem key={model.name} value={model.name}>
+                    {model.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="prompt-notes">Notes / Tags</Label>
+            <Textarea
+              id="prompt-notes"
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              placeholder="Add any notes, tags, or a summary for this log..."
+              rows={5}
+              maxLength={noteCharacterLimit ?? undefined}
+              disabled={isSubmitting}
             />
-        </CollapsibleContent>
-      </Collapsible>
+            <div className={cn(
+                "text-right text-xs",
+                noteCharacterLimit && note.length >= noteCharacterLimit ? "text-red-500" : "text-muted-foreground"
+            )}>
+              {note.length.toLocaleString()}
+              {noteCharacterLimit ? ` / ${noteCharacterLimit.toLocaleString()}` : ' characters'}
+            </div>
+          </div>
 
-      <Collapsible open={isOutputOpen} onOpenChange={setIsOutputOpen} className="grid gap-2">
-        <div className="flex items-center justify-between -mb-2">
-            <CollapsibleTrigger asChild>
-                <Button variant="ghost" size="sm" className="text-sm px-2 -ml-2">
-                    <ChevronsUpDown className="h-4 w-4 mr-2" />
-                    Add LLM Output (for token count)
-                </Button>
-            </CollapsibleTrigger>
-            {isOutputOpen && (
-              <span className="text-xs text-muted-foreground">
-                  ~{outputTokens.toLocaleString()} output tokens
-              </span>
-            )}
+          <Collapsible open={isInputOpen} onOpenChange={setIsInputOpen} className="grid gap-2">
+            <div className="flex items-center justify-between -mb-2">
+                <CollapsibleTrigger asChild>
+                    <Button variant="ghost" size="sm" className="text-sm px-2 -ml-2">
+                        <ChevronsUpDown className="h-4 w-4 mr-2" />
+                        Add LLM Input (for token count)
+                    </Button>
+                </CollapsibleTrigger>
+                {isInputOpen && (
+                  <span className="text-xs text-muted-foreground">
+                      ~{inputTokens.toLocaleString()} input tokens
+                  </span>
+                )}
+            </div>
+            <CollapsibleContent className="space-y-2 pt-2">
+                <Textarea 
+                    placeholder="Paste the original prompt text here to count input tokens..."
+                    value={inputText}
+                    onChange={(e) => setInputText(e.target.value)}
+                    rows={5}
+                    disabled={isSubmitting}
+                />
+            </CollapsibleContent>
+          </Collapsible>
+
+          <Collapsible open={isOutputOpen} onOpenChange={setIsOutputOpen} className="grid gap-2">
+            <div className="flex items-center justify-between -mb-2">
+                <CollapsibleTrigger asChild>
+                    <Button variant="ghost" size="sm" className="text-sm px-2 -ml-2">
+                        <ChevronsUpDown className="h-4 w-4 mr-2" />
+                        Add LLM Output (for token count)
+                    </Button>
+                </CollapsibleTrigger>
+                {isOutputOpen && (
+                  <span className="text-xs text-muted-foreground">
+                      ~{outputTokens.toLocaleString()} output tokens
+                  </span>
+                )}
+            </div>
+            <CollapsibleContent className="space-y-2 pt-2">
+                <Textarea 
+                    placeholder="Paste the model's output here to count output tokens..."
+                    value={outputText}
+                    onChange={(e) => setOutputText(e.target.value)}
+                    rows={5}
+                    disabled={isSubmitting}
+                />
+            </CollapsibleContent>
+          </Collapsible>
         </div>
-        <CollapsibleContent className="space-y-2 pt-2">
-            <Textarea 
-                placeholder="Paste the model's output here to count output tokens..."
-                value={outputText}
-                onChange={(e) => setOutputText(e.target.value)}
-                rows={5}
-                disabled={isSubmitting}
-            />
-        </CollapsibleContent>
-      </Collapsible>
+      </ScrollArea>
       <Button type="submit" disabled={isSubmitting || !note || !selectedModel}>
         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
         Log Prompt

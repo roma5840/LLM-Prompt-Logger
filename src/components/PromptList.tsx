@@ -35,6 +35,7 @@ import { Skeleton } from './ui/skeleton'
 import { cn } from '@/lib/utils'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible'
 import { Label } from './ui/label'
+import { ScrollArea } from './ui/scroll-area'
 
 interface PromptListProps {
   loading: boolean
@@ -325,106 +326,108 @@ export function PromptList({
                         <DialogHeader>
                           <DialogTitle>Edit Prompt Log</DialogTitle>
                         </DialogHeader>
-                        <div className="my-4 grid gap-4">
-                          <div className="grid gap-2">
-                            <Label htmlFor="edit-note">Note / Tags</Label>
-                            <Textarea
-                              id="edit-note"
-                              value={editedNote}
-                              onChange={e => setEditedNote(e.target.value)}
-                              rows={4}
-                              maxLength={editingPrompt.is_local_only ? undefined : noteCharacterLimit ?? undefined}
-                              placeholder="Enter prompt notes or tags..."
-                            />
-                            <div className={cn(
-                                "text-right text-xs mt-1",
-                                !editingPrompt.is_local_only && noteCharacterLimit && editedNote.length > noteCharacterLimit ? "text-red-500" : "text-muted-foreground"
-                            )}>
-                              {editedNote.length.toLocaleString()}
-                              {noteCharacterLimit && !editingPrompt.is_local_only ? ` / ${noteCharacterLimit.toLocaleString()}` : ' characters'}
+                        <ScrollArea className="my-4 max-h-[calc(80vh-220px)] sm:max-h-96 pr-4">
+                          <div className="grid gap-4">
+                            <div className="grid gap-2">
+                              <Label htmlFor="edit-note">Note / Tags</Label>
+                              <Textarea
+                                id="edit-note"
+                                value={editedNote}
+                                onChange={e => setEditedNote(e.target.value)}
+                                rows={4}
+                                maxLength={editingPrompt.is_local_only ? undefined : noteCharacterLimit ?? undefined}
+                                placeholder="Enter prompt notes or tags..."
+                              />
+                              <div className={cn(
+                                  "text-right text-xs mt-1",
+                                  !editingPrompt.is_local_only && noteCharacterLimit && editedNote.length > noteCharacterLimit ? "text-red-500" : "text-muted-foreground"
+                              )}>
+                                {editedNote.length.toLocaleString()}
+                                {noteCharacterLimit && !editingPrompt.is_local_only ? ` / ${noteCharacterLimit.toLocaleString()}` : ' characters'}
+                              </div>
                             </div>
+                            <Collapsible open={isInputOpen} onOpenChange={setIsInputOpen} className="grid gap-2">
+                              <div className="flex items-center justify-between -mb-2">
+                                  <CollapsibleTrigger asChild>
+                                      <Button variant="ghost" size="sm" className="text-sm px-2 -ml-2">
+                                          <ChevronsUpDown className="h-4 w-4 mr-2" />
+                                          Recalculate Input Tokens
+                                      </Button>
+                                  </CollapsibleTrigger>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-mono text-muted-foreground">
+                                        {editedInputTokens?.toLocaleString() ?? 'N/A'}
+                                    </span>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditedInputTokens(null)}>
+                                      <Trash2 className="h-4 w-4 text-destructive/70" />
+                                    </Button>
+                                  </div>
+                              </div>
+                              <CollapsibleContent className="space-y-2 pt-2">
+                                  <Textarea 
+                                      placeholder="Paste original prompt here to recalculate tokens..."
+                                      value={inputTextForRecalc}
+                                      onChange={(e) => setInputTextForRecalc(e.target.value)}
+                                      rows={5}
+                                  />
+                                  <div className="flex justify-center items-center gap-4 text-xs text-muted-foreground">
+                                      <p>Recalculated tokens: ~{recalculatedInputTokens.toLocaleString()}</p>
+                                      {inputTextForRecalc && (
+                                          <Button
+                                              type="button"
+                                              variant="link"
+                                              size="sm"
+                                              className="h-auto p-0 text-xs"
+                                              onClick={handleApplyRecalculatedInputTokens}
+                                          >
+                                              Apply
+                                          </Button>
+                                      )}
+                                  </div>
+                              </CollapsibleContent>
+                            </Collapsible>
+                            <Collapsible open={isOutputOpen} onOpenChange={setIsOutputOpen} className="grid gap-2">
+                              <div className="flex items-center justify-between -mb-2">
+                                  <CollapsibleTrigger asChild>
+                                      <Button variant="ghost" size="sm" className="text-sm px-2 -ml-2">
+                                          <ChevronsUpDown className="h-4 w-4 mr-2" />
+                                          Recalculate Output Tokens
+                                      </Button>
+                                  </CollapsibleTrigger>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-mono text-muted-foreground">
+                                        {editedOutputTokens?.toLocaleString() ?? 'N/A'}
+                                    </span>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditedOutputTokens(null)}>
+                                      <Trash2 className="h-4 w-4 text-destructive/70" />
+                                    </Button>
+                                  </div>
+                              </div>
+                              <CollapsibleContent className="space-y-2 pt-2">
+                                  <Textarea 
+                                      placeholder="Paste model output here to recalculate tokens..."
+                                      value={outputTextForRecalc}
+                                      onChange={(e) => setOutputTextForRecalc(e.target.value)}
+                                      rows={5}
+                                  />
+                                  <div className="flex justify-center items-center gap-4 text-xs text-muted-foreground">
+                                      <p>Recalculated tokens: ~{recalculatedOutputTokens.toLocaleString()}</p>
+                                      {outputTextForRecalc && (
+                                          <Button
+                                              type="button"
+                                              variant="link"
+                                              size="sm"
+                                              className="h-auto p-0 text-xs"
+                                              onClick={handleApplyRecalculatedOutputTokens}
+                                          >
+                                              Apply
+                                          </Button>
+                                      )}
+                                  </div>
+                              </CollapsibleContent>
+                            </Collapsible>
                           </div>
-                          <Collapsible open={isInputOpen} onOpenChange={setIsInputOpen} className="grid gap-2">
-                            <div className="flex items-center justify-between -mb-2">
-                                <CollapsibleTrigger asChild>
-                                    <Button variant="ghost" size="sm" className="text-sm px-2 -ml-2">
-                                        <ChevronsUpDown className="h-4 w-4 mr-2" />
-                                        Recalculate Input Tokens
-                                    </Button>
-                                </CollapsibleTrigger>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-mono text-muted-foreground">
-                                      {editedInputTokens?.toLocaleString() ?? 'N/A'}
-                                  </span>
-                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditedInputTokens(null)}>
-                                    <Trash2 className="h-4 w-4 text-destructive/70" />
-                                  </Button>
-                                </div>
-                            </div>
-                            <CollapsibleContent className="space-y-2 pt-2">
-                                <Textarea 
-                                    placeholder="Paste original prompt here to recalculate tokens..."
-                                    value={inputTextForRecalc}
-                                    onChange={(e) => setInputTextForRecalc(e.target.value)}
-                                    rows={5}
-                                />
-                                <div className="flex justify-center items-center gap-4 text-xs text-muted-foreground">
-                                    <p>Recalculated tokens: ~{recalculatedInputTokens.toLocaleString()}</p>
-                                    {inputTextForRecalc && (
-                                        <Button
-                                            type="button"
-                                            variant="link"
-                                            size="sm"
-                                            className="h-auto p-0 text-xs"
-                                            onClick={handleApplyRecalculatedInputTokens}
-                                        >
-                                            Apply
-                                        </Button>
-                                    )}
-                                </div>
-                            </CollapsibleContent>
-                          </Collapsible>
-                          <Collapsible open={isOutputOpen} onOpenChange={setIsOutputOpen} className="grid gap-2">
-                            <div className="flex items-center justify-between -mb-2">
-                                <CollapsibleTrigger asChild>
-                                    <Button variant="ghost" size="sm" className="text-sm px-2 -ml-2">
-                                        <ChevronsUpDown className="h-4 w-4 mr-2" />
-                                        Recalculate Output Tokens
-                                    </Button>
-                                </CollapsibleTrigger>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-mono text-muted-foreground">
-                                      {editedOutputTokens?.toLocaleString() ?? 'N/A'}
-                                  </span>
-                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditedOutputTokens(null)}>
-                                    <Trash2 className="h-4 w-4 text-destructive/70" />
-                                  </Button>
-                                </div>
-                            </div>
-                            <CollapsibleContent className="space-y-2 pt-2">
-                                <Textarea 
-                                    placeholder="Paste model output here to recalculate tokens..."
-                                    value={outputTextForRecalc}
-                                    onChange={(e) => setOutputTextForRecalc(e.target.value)}
-                                    rows={5}
-                                />
-                                <div className="flex justify-center items-center gap-4 text-xs text-muted-foreground">
-                                    <p>Recalculated tokens: ~{recalculatedOutputTokens.toLocaleString()}</p>
-                                    {outputTextForRecalc && (
-                                        <Button
-                                            type="button"
-                                            variant="link"
-                                            size="sm"
-                                            className="h-auto p-0 text-xs"
-                                            onClick={handleApplyRecalculatedOutputTokens}
-                                        >
-                                            Apply
-                                        </Button>
-                                    )}
-                                </div>
-                            </CollapsibleContent>
-                          </Collapsible>
-                        </div>
+                        </ScrollArea>
                         <DialogFooter>
                           <DialogClose asChild>
                              <Button variant="outline">Cancel</Button>
