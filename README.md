@@ -20,12 +20,14 @@ Your privacy is paramount. With E2EE, your prompt data is encrypted on your devi
 ## Key Features
 
 *   **Local-First & Private**: Your data stays on your device by default using your browser's local storage. No account is needed to get started.
-*   **Optional E2EE Cloud Sync**: Enable cloud sync with a master password. Your data is encrypted on your device via the Web Crypto API before being sent to the cloud, ensuring only you can decrypt it.
+*   **Optional E2EE Cloud Sync**: Enable cloud sync with a master password. Your data is encrypted on your device via the Web Crypto API before being sent to the cloud. An in-app explanation clearly shows what data is and isn't visible to the server, ensuring full transparency.
 *   **Seamless Device Linking**: Easily link a new device to your cloud account by scanning a QR code or entering the sync key manually.
 *   **Insightful Dashboard**: Visualize your prompt history with stats on total usage, daily activity, token counts, and a breakdown of which models you use most frequently.
+*   **Conflict Resolution**: An intelligent migration assistant helps resolve conflicts when local notes are too long for encrypted sync, ensuring a smooth transition to the cloud.
 *   **Token Tracking & Calculation**: Log output tokens for your prompts, or paste the LLM's output to get an estimated token count.
 *   **Data Portability**: Full control over your data. Export your entire decrypted prompt history to a JSON file and import it back at any time, whether you're using local or cloud storage.
 *   **Custom Model Management**: The default models are just a starting point. Add, remove, and manage your own list of custom model names.
+*   **Built-in FAQ**: A dedicated FAQ page answers common user questions about privacy, data management, and app features.
 *   **Responsive Design**: A seamless experience on desktop, tablet, and mobile devices.
 
 ## Tech Stack
@@ -39,6 +41,8 @@ Your privacy is paramount. With E2EE, your prompt data is encrypted on your devi
 -   **State Management**: React Context (`useContext` and `useState`)
 -   **Data Visualization**: [Recharts](https://recharts.org/)
 -   **QR Code Handling**: [html5-qrcode](https://github.com/mebjas/html5-qrcode) & [qrcode](https://github.com/soldair/node-qrcode)
+-   **Theme Management**: [next-themes](https://github.com/pacocoursey/next-themes)
+-   **Analytics**: [Vercel Analytics](https://vercel.com/analytics)
 -   **Deployment**: [Vercel](https://vercel.com/)
 
 ## Getting Started / Local Development
@@ -99,18 +103,27 @@ LLM-Prompt-Logger/
 │   │   ├── dev.ts
 │   │   └── genkit.ts
 │   ├── app
+│   │   ├── faq
+│   │   │   └── page.tsx
 │   │   ├── settings
 │   │   │   └── page.tsx
 │   │   ├── globals.css
 │   │   ├── layout.tsx
 │   │   └── page.tsx
 │   ├── components
-│   │   ├── ui/
+│   │   ├── ui
+│   │   │   ├── accordion.tsx
+│   │   │   ├── alert-dialog.tsx
+│   │   │   ├── alert.tsx
+│   │   │   ├── ... (and 30+ other UI components)
+│   │   ├── E2EEExplanation.tsx
 │   │   ├── MainLayout.tsx
+│   │   ├── MigrationConflictResolver.tsx
 │   │   ├── PromptList.tsx
 │   │   ├── PromptLogger.tsx
 │   │   ├── Stats.tsx
 │   │   ├── theme-provider.tsx
+│   │   ├── ThemeToggle.tsx
 │   │   └── Welcome.tsx
 │   ├── hooks
 │   │   ├── use-data.tsx
