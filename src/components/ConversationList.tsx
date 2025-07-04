@@ -60,9 +60,9 @@ export function ConversationList({
   }, [editingConversationId]);
 
   const modelCostMap = useMemo(() => {
-    const map = new Map<string, { inputCost: number; outputCost: number }>();
+    const map = new Map<string, Model>();
     models.forEach(model => {
-      map.set(model.name, { inputCost: model.inputCost, outputCost: model.outputCost });
+      map.set(model.name, model);
     });
     return map;
   }, [models]);
@@ -75,14 +75,38 @@ export function ConversationList({
   const totalPages = Math.ceil(conversations.length / ITEMS_PER_PAGE)
 
   const calculateCost = (convo: Conversation) => {
-    return convo.messages.reduce((total, turn) => {
-        const costs = modelCostMap.get(turn.model);
-        if (!costs) return total;
-        
-        const inputCost = (turn.input_tokens || 0) / 1_000_000 * costs.inputCost;
-        const outputCost = (turn.output_tokens || 0) / 1_000_000 * costs.outputCost;
-        return total + inputCost + outputCost;
-    }, 0);
+    let totalCost = 0;
+    let cumulativeInputTokens = 0;
+    let cumulativeOutputTokens = 0;
+
+    convo.messages.forEach(turn => {
+      const model = modelCostMap.get(turn.model);
+      if (!model) return;
+
+      const contextTokens = cumulativeInputTokens + cumulativeOutputTokens;
+      const turnInputTokens = turn.input_tokens || 0;
+      const turnOutputTokens = turn.output_tokens || 0;
+
+      let turnCost = 0;
+
+      // Calculate context cost
+      if (contextTokens > 0) {
+        const contextCostPerToken = (model.isCacheEnabled ? model.cachedInputCost : model.inputCost) / 1_000_000;
+        turnCost += contextTokens * contextCostPerToken;
+      }
+
+      // Calculate I/O cost for this turn
+      turnCost += turnInputTokens * (model.inputCost / 1_000_000);
+      turnCost += turnOutputTokens * (model.outputCost / 1_000_000);
+      
+      totalCost += turnCost;
+
+      // Update cumulative tokens for the next turn
+      cumulativeInputTokens += turnInputTokens;
+      cumulativeOutputTokens += turnOutputTokens;
+    });
+
+    return totalCost;
   }
   
   const handleStartEdit = (convo: Conversation) => {
