@@ -624,11 +624,19 @@ export default function SettingsPage() {
                         <AlertDialogHeader>
                           <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                           <AlertDialogDescription>
-                            This action is disabled for safety. Please delete conversations individually from the dashboard.
+                            This will permanently delete all synced conversations and their messages from the cloud. Your account, models, and local-only conversations will not be affected. This action cannot be undone.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogCancel disabled={data.syncing}>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            className={buttonVariants({ variant: "destructive" })}
+                            onClick={handleDeleteAllData}
+                            disabled={data.syncing}
+                          >
+                            {data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Delete Synced Data
+                          </AlertDialogAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>

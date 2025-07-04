@@ -719,14 +719,24 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const deleteAllData = async () => {
-    // This function is now very dangerous and simplified. A better implementation might batch delete.
     if (syncKey) {
-      toast({
-        title: "Action Disabled",
-        description:
-          "Batch-deleting all synced data is disabled for safety. Please delete conversations individually.",
-        variant: "default",
+      if (!encryptionKey || !masterPassword) throw new Error("App is locked.");
+      const salt = localStorage.getItem(SALT_STORAGE);
+      if (!salt) throw new Error("Salt not found.");
+      const token = await getAccessToken(masterPassword, salt);
+
+      const { error } = await supabase.rpc("delete_all_my_conversations", {
+        p_bucket_id: syncKey,
+        p_access_token: token,
       });
+
+      if (error) {
+        throw new Error("Failed to delete synced data. Please try again.");
+      }
+
+      setConversations([]);
+      await broadcastChange("data_changed");
+
     } else {
       setConversations([]);
     }
