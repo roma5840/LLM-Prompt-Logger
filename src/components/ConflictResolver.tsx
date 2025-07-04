@@ -38,6 +38,42 @@ const descriptions = {
   migration: `You have ${'COUNT'} local turn(s) with notes longer than the sync limit of ${NOTE_CHAR_LIMIT} characters. To enable cloud sync, please resolve each conflict below.`
 }
 
+function EditConflictModal({ conflict, onSave, onClose }: { conflict: ImportConflict, onSave: (conflict: ImportConflict, content: string) => void, onClose: () => void }) {
+  const [content, setContent] = useState(conflict.turnContent)
+  const isUnderLimit = content.length <= NOTE_CHAR_LIMIT
+
+  return (
+    <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Edit Note to Fit</DialogTitle>
+          <DialogDescription>Reduce the note content to {NOTE_CHAR_LIMIT} characters or less to sync it.</DialogDescription>
+        </DialogHeader>
+        <div className="my-4">
+          <Textarea
+            value={content}
+            onChange={e => setContent(e.target.value)}
+            rows={12}
+            className="text-xs"
+          />
+          <div className={cn(
+            "text-right text-sm mt-2",
+            isUnderLimit ? "text-muted-foreground" : "text-destructive font-semibold"
+          )}>
+            {content.length.toLocaleString()} / {NOTE_CHAR_LIMIT.toLocaleString()}
+          </div>
+        </div>
+        <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+            <Button onClick={() => onSave(conflict, content)} disabled={!isUnderLimit}>
+                Save and Sync
+            </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export function ConflictResolver({ isOpen, conflicts, onResolve, onCancel, mode }: ConflictResolverProps) {
   const [resolutions, setResolutions] = useState<Record<number, Resolution>>({})
   const [editingConflict, setEditingConflict] = useState<ImportConflict | null>(null)
@@ -86,6 +122,26 @@ export function ConflictResolver({ isOpen, conflicts, onResolve, onCancel, mode 
     setEditingConflict(null);
   }
 
+  const handleUndoResolution = (conflict: ImportConflict) => {
+    const conversationIdToUndo = conflict.conversationId;
+    
+    const turnIdsToUndo = new Set(
+      conflicts
+        .filter(c => c.conversationId === conversationIdToUndo)
+        .map(c => c.turnId)
+    );
+
+    setResolutions(prev => {
+        const newResolutions = { ...prev };
+        for (const turnId in newResolutions) {
+            if (turnIdsToUndo.has(Number(turnId))) {
+                delete newResolutions[turnId];
+            }
+        }
+        return newResolutions;
+    });
+  };
+
   return (
     <>
       <Dialog open={isOpen} onOpenChange={() => {}}>
@@ -123,10 +179,7 @@ export function ConflictResolver({ isOpen, conflicts, onResolve, onCancel, mode 
                               {resolutions[conflict.turnId].choice === 'edit' ? 'Resolved: Will be edited and synced' : 'Resolved: Conversation will be kept on this device only'}
                             </p>
                           </div>
-                          <Button variant="link" size="sm" onClick={() => {
-                              const {[conflict.turnId]: _, ...rest} = resolutions;
-                              setResolutions(rest);
-                          }}>Undo</Button>
+                          <Button variant="link" size="sm" onClick={() => handleUndoResolution(conflict)}>Undo</Button>
                         </div>
                       ) : (
                         <div className="flex items-center justify-end gap-2">
