@@ -105,13 +105,18 @@ export default function SettingsPage() {
 
   const handleUpdateModel = (index: number, field: keyof Model, value: string | number) => {
     const updatedModels = [...editableModels];
-    const modelToUpdate = { ...updatedModels[index] }; // Create a shallow copy of the object
+    const modelToUpdate = { ...updatedModels[index] };
 
     if (field === 'name' && typeof value === 'string') {
         modelToUpdate.name = value;
-    } else if ((field === 'inputCost' || field === 'outputCost') && typeof value === 'number') {
-        modelToUpdate[field] = value >= 0 ? value : 0;
+    } else if (field === 'inputCost' || field === 'outputCost') {
+        const stringValue = String(value);
+        const numericValue = parseFloat(stringValue);
+        // If the string is empty, or parsing fails, or it's negative, the value is 0.
+        // Otherwise, it's the parsed number.
+        modelToUpdate[field] = (stringValue === '' || isNaN(numericValue) || numericValue < 0) ? 0 : numericValue;
     }
+    
     updatedModels[index] = modelToUpdate;
     setEditableModels(updatedModels);
   };
@@ -365,59 +370,46 @@ export default function SettingsPage() {
               <CardDescription>Add, remove, and define costs for the LLM models you use.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="hidden md:grid md:grid-cols-[2fr_1fr_1fr_auto] gap-x-4 items-center mb-2 px-2">
-                  <Label className="text-muted-foreground font-normal text-sm">Model Name</Label>
-                  <Label className="text-muted-foreground font-normal text-sm">Input Cost / 1M ($)</Label>
-                  <Label className="text-muted-foreground font-normal text-sm">Output Cost / 1M ($)</Label>
-                  <div className="w-[40px]"></div>
-              </div>
-
-              <div className="space-y-2">
+              <div className="space-y-4">
                 {editableModels.map((model, index) => (
-                  <div key={index} className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_auto] gap-x-4 gap-y-2 items-center p-3 border rounded-lg bg-background hover:bg-muted/50 transition-colors">
-                    <div className="space-y-1 md:space-y-0">
-                      <Label htmlFor={`model-name-${index}`} className="text-xs font-medium text-muted-foreground md:hidden">Model Name</Label>
+                  <div key={index} className="p-4 border rounded-lg space-y-4">
+                    <div className="flex justify-between items-start">
                       <Input
-                        id={`model-name-${index}`}
                         value={model.name}
                         onChange={e => handleUpdateModel(index, 'name', e.target.value)}
                         placeholder="Model name"
                         maxLength={MODEL_NAME_MAX_LENGTH}
-                        className="font-medium"
+                        className="text-base font-semibold !mt-0"
                       />
-                    </div>
-
-                    <div className="space-y-1 md:space-y-0">
-                      <Label htmlFor={`input-cost-${index}`} className="text-xs font-medium text-muted-foreground md:hidden">Input Cost / 1M tokens ($)</Label>
-                      <Input
-                        id={`input-cost-${index}`}
-                        type="number"
-                        step="0.0001"
-                        min="0"
-                        value={model.inputCost}
-                        onChange={e => handleUpdateModel(index, 'inputCost', parseFloat(e.target.value))}
-                        placeholder="e.g., 0.50"
-                      />
-                    </div>
-
-                    <div className="space-y-1 md:space-y-0">
-                      <Label htmlFor={`output-cost-${index}`} className="text-xs font-medium text-muted-foreground md:hidden">Output Cost / 1M tokens ($)</Label>
-                      <Input
-                        id={`output-cost-${index}`}
-                        type="number"
-                        step="0.0001"
-                        min="0"
-                        value={model.outputCost}
-                        onChange={e => handleUpdateModel(index, 'outputCost', parseFloat(e.target.value))}
-                        placeholder="e.g., 1.50"
-                      />
-                    </div>
-
-                    <div className="flex justify-end md:justify-center">
-                      <Button variant="ghost" size="icon" className="shrink-0 group" onClick={() => handleRemoveModel(index)}>
-                        <Trash2 className="h-4 w-4 text-muted-foreground group-hover:text-destructive transition-colors" />
-                        <span className="sr-only">Remove model</span>
+                      <Button variant="ghost" size="icon" className="shrink-0" onClick={() => handleRemoveModel(index)}>
+                        <Trash2 className="h-4 w-4 text-muted-foreground" />
                       </Button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor={`input-cost-${index}`}>Input Cost / 1M tokens ($)</Label>
+                        <Input
+                          id={`input-cost-${index}`}
+                          type="number"
+                          step="0.0001"
+                          min="0"
+                          value={model.inputCost || ''}
+                          onChange={e => handleUpdateModel(index, 'inputCost', e.target.value)}
+                          placeholder="0"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor={`output-cost-${index}`}>Output Cost / 1M tokens ($)</Label>
+                        <Input
+                          id={`output-cost-${index}`}
+                          type="number"
+                          step="0.0001"
+                          min="0"
+                          value={model.outputCost || ''}
+                          onChange={e => handleUpdateModel(index, 'outputCost', e.target.value)}
+                          placeholder="0"
+                        />
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -425,43 +417,37 @@ export default function SettingsPage() {
 
               <Separator className="my-6" />
 
-              <div className="space-y-2">
-                <Label className="font-medium">Add a new model</Label>
-                <div className="flex items-start gap-2">
-                    <div className="flex-grow space-y-1">
-                        <Input
-                            value={newModelName}
-                            onChange={e => setNewModelName(e.target.value)}
-                            placeholder={isModelLimitReached ? "Model limit reached" : "Enter new model name"}
-                            maxLength={MODEL_NAME_MAX_LENGTH}
-                            disabled={isModelLimitReached}
-                            onKeyDown={(e) => e.key === 'Enter' && handleAddModel()}
-                        />
-                        {isModelLimitReached ? (
-                            <p className="text-xs text-red-500 px-1">You have reached the maximum of {MODEL_LIMIT} models.</p>
-                        ) : (
-                            <div className={cn("text-right text-xs pr-1", newModelName.length >= MODEL_NAME_MAX_LENGTH ? "text-red-500" : "text-muted-foreground")}>
-                                {newModelName.length} / {MODEL_NAME_MAX_LENGTH}
-                            </div>
-                        )}
-                    </div>
-                    <Button onClick={handleAddModel} disabled={isModelLimitReached || !newModelName} className="shrink-0">Add Model</Button>
-                </div>
+              <div className="flex items-start space-x-2">
+                  <div className="flex-grow space-y-1">
+                      <Input
+                          value={newModelName}
+                          onChange={e => setNewModelName(e.target.value)}
+                          placeholder={isModelLimitReached ? "Model limit reached" : "New model name"}
+                          maxLength={MODEL_NAME_MAX_LENGTH}
+                          disabled={isModelLimitReached}
+                          onKeyDown={(e) => e.key === 'Enter' && handleAddModel()}
+                      />
+                      {isModelLimitReached ? (
+                          <p className="text-xs text-red-500 px-1">You have reached the maximum of {MODEL_LIMIT} models.</p>
+                      ) : (
+                          <div className={cn("text-right text-xs pr-1", newModelName.length >= MODEL_NAME_MAX_LENGTH ? "text-red-500" : "text-muted-foreground")}>
+                              {newModelName.length} / {MODEL_NAME_MAX_LENGTH}
+                          </div>
+                      )}
+                  </div>
+                  <Button onClick={handleAddModel} disabled={isModelLimitReached || !newModelName}>Add Model</Button>
               </div>
 
               {haveModelsChanged && (
-                <div className="mt-6 p-4 bg-secondary/50 border rounded-lg flex flex-col sm:flex-row justify-end items-center gap-4">
-                    <p className="text-sm text-muted-foreground flex-grow text-center sm:text-left">You have unsaved changes.</p>
-                    <div className="flex gap-2">
-                        <Button onClick={handleDiscardChanges} variant="outline">
-                            <RotateCcw className="mr-2 h-4 w-4" />
-                            Discard
-                        </Button>
-                        <Button onClick={handleSaveChanges}>
-                            <Save className="mr-2 h-4 w-4" />
-                            Save Changes
-                        </Button>
-                    </div>
+                <div className="mt-6 p-4 bg-secondary/50 border rounded-lg flex justify-end gap-2">
+                    <Button onClick={handleDiscardChanges} variant="outline">
+                        <RotateCcw className="mr-2 h-4 w-4" />
+                        Discard Changes
+                    </Button>
+                    <Button onClick={handleSaveChanges}>
+                        <Save className="mr-2 h-4 w-4" />
+                        Save Changes
+                    </Button>
                 </div>
               )}
             </CardContent>
