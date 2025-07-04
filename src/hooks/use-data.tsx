@@ -642,12 +642,16 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
     if (targetConvo.is_local_only) {
       setLocalOnlyConversations((prev) => prev.filter((c) => c.id !== id));
-    } else {
-      const originalConversations = conversations;
-      setConversations((prev) => prev.filter((c) => c.id !== id));
-      if (syncKey) {
-        if (!encryptionKey || !masterPassword)
-          throw new Error("App is locked.");
+      router.push("/");
+      return;
+    }
+
+    const originalConversations = conversations;
+    setConversations((prev) => prev.filter((c) => c.id !== id));
+    
+    if (syncKey) {
+      try {
+        if (!encryptionKey || !masterPassword) throw new Error("App is locked.");
         const salt = localStorage.getItem(SALT_STORAGE);
         if (!salt) throw new Error("Salt not found.");
         const token = await getAccessToken(masterPassword, salt);
@@ -657,18 +661,23 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
           p_access_token: token,
         });
         if (error) {
-          setConversations(originalConversations);
-          toast({
-            title: "Error",
-            description: "Failed to delete conversation.",
-            variant: "destructive",
-          });
-        } else {
-          await broadcastChange("data_changed");
+          throw error;
         }
+
+        await broadcastChange("data_changed");
+        router.push("/");
+        
+      } catch (error) {
+        setConversations(originalConversations);
+        toast({
+          title: "Error",
+          description: "Failed to delete conversation from the cloud.",
+          variant: "destructive",
+        });
       }
+    } else {
+        router.push("/");
     }
-    router.push("/");
   };
 
   const updateConversationTitle = async (id: number, newTitle: string) => {

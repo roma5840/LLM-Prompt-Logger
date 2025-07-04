@@ -208,7 +208,6 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
                   </DialogHeader>
                   <ConversationStarter
                     createConversation={data.createConversation}
-                    models={data.models}
                     onConversationStarted={handleConversationStarted}
                     isSubmitting={isSubmitting}
                     setIsSubmitting={setIsSubmitting}
@@ -220,7 +219,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
             </div>
           </SidebarContent>
           <SidebarFooter className="p-4 text-xs text-muted-foreground">
-            Version 2.0.1
+            Version 2.0.2
           </SidebarFooter>
         </Sidebar>
         

@@ -52,15 +52,14 @@ export function Stats({ conversations, models }: StatsProps) {
   const allMessages = useMemo(() => conversations.flatMap(c => c.messages), [conversations]);
 
   const calculateCost = (messages: Message[]) => {
-    // This is a simplified calculation. A truly accurate one would need to know the model for each message.
-    // We'll assume the first model in the list for this stat view for simplicity.
-    const costs = models.length > 0 ? modelCostMap.get(models[0].name) : null;
-    if (!costs) return 0;
+    return messages.reduce((total, msg) => {
+        const costs = modelCostMap.get(msg.model);
+        if (!costs) return total;
 
-    return messages.reduce((acc, msg) => {
-      const inputCost = (msg.input_tokens || 0) / 1_000_000 * costs.inputCost;
-      const outputCost = (msg.output_tokens || 0) / 1_000_000 * costs.outputCost;
-      return acc + inputCost + outputCost;
+        const inputCost = (msg.input_tokens || 0) / 1_000_000 * costs.inputCost;
+        const outputCost = (msg.output_tokens || 0) / 1_000_000 * costs.outputCost;
+        
+        return total + inputCost + outputCost;
     }, 0);
   };
   
@@ -90,7 +89,7 @@ export function Stats({ conversations, models }: StatsProps) {
     }
     
     return last14Days.map(date => {
-      const dateKey = date.toLocaleDateString('en-CA');
+      const dateKey = date.toLocaleDate-String('en-CA');
       const displayDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       return {
         date: displayDate,
