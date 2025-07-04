@@ -23,7 +23,7 @@ Your privacy is paramount. With E2EE, your conversation data is encrypted on you
 
 *   **Conversation-Centric Logging**: Group your LLM interactions into conversations. Log individual "turns" with detailed notes and token counts.
 *   **Context-Aware Cost Calculation**: Automatically calculates the cost of each turn, factoring in the accumulated tokens from previous turns in the conversation.
-*   **Cache Discount Modeling**: Simulate cost savings from models that offer cached context pricing by enabling a configurable cache discount percentage for each model.
+*   **Cached Context Pricing**: Simulate cost savings from models that offer cheaper pricing for context tokens. Enable caching and set a specific "Cached Cost" for each model.
 *   **Local-First & Private**: Your data stays on your device by default using your browser's local storage. No account is needed to get started.
 *   **Optional E2EE Cloud Sync**: Enable cloud sync with a master password. Your data is encrypted on your device via the Web Crypto API before being sent to the cloud.
 *   **Seamless Device Linking**: Easily link a new device to your cloud account by scanning a QR code or entering the sync key manually.
@@ -98,6 +98,9 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 ```
 LLM-Prompt-Logger/
 ├── src
+│   ├── ai
+│   │   ├── dev.ts
+│   │   └── genkit.ts
 │   ├── app
 │   │   ├── conversation
 │   │   │   └── [id]

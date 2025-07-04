@@ -48,7 +48,7 @@ const faqData = [
   },
   {
     question: "How are costs calculated? (Context-Aware)",
-    answer: "The app calculates cost for each individual turn within a conversation. The cost for a turn is the sum of three parts:\n\n1. Context Cost: The cost of all input and output tokens from all previous turns in the conversation.\n2. Input Cost: The cost of the new input tokens for the current turn.\n3. Output Cost: The cost of the new output tokens for the current turn.\n\nOn the Settings page, you can enable a 'Cache Discount' for each model. If enabled, the Context Cost for each turn is reduced by the specified percentage, simulating the savings from models that offer cached context pricing."
+    answer: "The app calculates cost for each individual turn within a conversation. The cost for a turn is the sum of three parts:\n\n1. Context Cost: The cost of all input and output tokens from all previous turns in the conversation.\n2. Input Cost: The cost of the new input tokens for the current turn.\n3. Output Cost: The cost of the new output tokens for the current turn.\n\nOn the Settings page, you can enable 'Cache' for each model. If enabled, the Context Cost for each turn is calculated using a separate, often cheaper, 'Cached Cost / 1M tokens' that you can define. This simulates the savings from models that offer cached context pricing."
   }
 ];
 

@@ -12,23 +12,23 @@ interface WelcomeProps {
 const features = [
   {
     icon: <BotMessageSquare className="h-8 w-8 text-primary" />,
-    title: 'Log Every Prompt',
-    description: 'Quickly save notes, tags, and metadata for every LLM interaction. Never lose a brilliant idea again.',
+    title: 'Context-Aware Logging',
+    description: 'Go beyond single prompts. Group interactions into conversations and see how costs accumulate with each turn, including the full conversational context.',
   },
   {
     icon: <BarChart3 className="h-8 w-8 text-primary" />,
-    title: 'Analyze Your Usage',
-    description: 'Visualize your prompt history with insightful charts. Understand which models you use most and track your activity over time.',
+    title: 'Detailed Cost Analysis',
+    description: 'Define custom models with unique input, output, and cached context prices. Visualize your spending with insightful charts to understand your usage patterns.',
   },
   {
     icon: <ShieldCheck className="h-8 w-8 text-primary" />,
     title: 'E2E Encrypted Sync',
-    description: 'Enable cloud sync with a Master Password. Your data is encrypted on your device and unreadable by anyone but you, keeping your history private and in sync.',
+    description: 'Optionally sync across devices. Your data is encrypted on your device with a password only you know, making it unreadable to the server.',
   },
   {
     icon: <FileDown className="h-8 w-8 text-primary" />,
-    title: 'Own Your Data',
-    description: 'Your data is yours. Easily export your entire prompt history to a JSON file at any time, whether you use local storage or cloud sync.',
+    title: 'Local-First & Portable',
+    description: 'Works entirely on your device with no account needed. Easily export your entire history to a JSON file at any time.',
   },
 ]
 

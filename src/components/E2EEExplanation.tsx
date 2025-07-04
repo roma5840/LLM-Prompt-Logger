@@ -74,7 +74,7 @@ export function E2EEExplanation() {
             What We CAN See
           </h3>
           <ul className="list-disc list-inside mt-2 text-muted-foreground space-y-1">
-            <li>The model names you use and their configured costs</li>
+            <li>Model names and their configured costs (input, output, and cached costs)</li>
             <li>Timestamps of conversations and turns</li>
             <li>One-way hashes for password verification (cannot be reversed to find your password)</li>
           </ul>
