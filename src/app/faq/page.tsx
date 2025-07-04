@@ -12,11 +12,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 const faqData = [
   {
     question: "What is PromptLog?",
-    answer: "PromptLog is a personal, privacy-focused application designed to help you log, analyze, and manage your interactions with Large Language Models (LLMs). It allows you to save notes, track input/output token usage, estimate costs, and visualize your activity over time, all while keeping your data secure."
+    answer: "PromptLog is a personal, privacy-focused application designed to help you log, analyze, and manage your interactions with Large Language Models (LLMs). It allows you to group interactions into conversations, log individual turns with notes, track token usage, estimate costs with context awareness, and visualize your activity over time."
   },
   {
     question: "Is my data private and secure?",
-    answer: "Yes. Security is our top priority. The app operates in two modes: \n\n1. Local-Only: By default, all your data is stored directly on your device in your browser's local storage. It never leaves your computer.\n\n2. E2E Encrypted Sync: If you choose to enable cloud sync, your data is end-to-end encrypted. This means your private data (like prompt notes, input tokens, and output tokens) is encrypted on your device using a Master Password that only you know. The server only stores the encrypted, unreadable data. We cannot access your sensitive information."
+    answer: "Yes. Security is our top priority. The app operates in two modes: \n\n1. Local-Only: By default, all your data is stored directly on your device in your browser's local storage. It never leaves your computer.\n\n2. E2E Encrypted Sync: If you choose to enable cloud sync, your data is end-to-end encrypted. This means your private data (like conversation titles, turn summaries, and token counts) is encrypted on your device using a Master Password that only you know. The server only stores the encrypted, unreadable data. We cannot access your sensitive information."
   },
   {
     question: "What happens if I forget my Master Password?",
@@ -24,15 +24,15 @@ const faqData = [
   },
   {
     question: "How does cloud sync work?",
-    answer: "When you enable cloud sync, you create a Master Password. This password is used to derive an encryption key on your device. Your prompt notes, input token counts, and output token counts are then encrypted with this key before being sent to our secure cloud storage (hosted on Supabase). This ensures that even we cannot read your sensitive data."
+    answer: "When you enable cloud sync, you create a Master Password. This password is used to derive an encryption key on your device. Your conversation titles, turn summaries, and token counts are then encrypted with this key before being sent to our secure cloud storage (hosted on Supabase). This ensures that even we cannot read your sensitive data."
   },
   {
     question: "Can I use this app offline?",
-    answer: "Yes. The app is fully functional offline. Any prompts you log while offline will be stored locally on your device. If you have cloud sync enabled, they will be synced automatically the next time you are online."
+    answer: "Yes. The app is fully functional offline. Any conversations or turns you log while offline will be stored locally on your device. If you have cloud sync enabled, they will be synced automatically the next time you are online."
   },
   {
     question: "How do I move my data to another device?",
-    answer: "You have two options:\n\n1. Cloud Sync (Recommended): Enable sync on your first device. On your new device, choose 'Link This Device' on the Settings page and enter your Sync Key and Master Password. Your encrypted data will be downloaded and decrypted locally.\n\n2. Manual Export/Import: On your original device, go to Settings and click 'Export Data'. This will save a JSON file of your history. On the new device, use the 'Import Data' button to load this file."
+    answer: "You have two options:\n\n1. Cloud Sync (Recommended): Enable sync on your first device. On your new device, choose 'Link This Device' on the Settings page and enter your Sync Key and Master Password. Your encrypted data will be downloaded and decrypted locally.\n\n2. Manual Export/Import: On your original device, go to Settings and click 'Export Data'. This will save a JSON file of your conversations. On the new device, use the 'Import Data' button to load this file."
   },
   {
     question: "What's the difference between 'Unlink Device' and 'Delete Account'?",
@@ -40,15 +40,15 @@ const faqData = [
   },
   {
     question: "Why is there a character limit on notes when sync is enabled?",
-    answer: "To be transparent, this is a hobby project and running a sync server has real costs. To keep the E2E Encrypted Sync feature available for everyone to try, synced notes are limited to 1,500 characters. Notes stored only locally on your device have no limit."
+    answer: "To be transparent, this is a hobby project and running a sync server has real costs. To keep the E2E Encrypted Sync feature available for everyone to try, synced turn summaries are limited to 1,500 characters. Conversations stored only locally on your device have no limit."
   },
   {
     question: "How are token counts calculated?",
-    answer: "The token counts are estimates calculated based on the length of the text you paste into the 'LLM Input' and 'LLM Output' fields. It uses a common heuristic where 4 characters roughly equal 1 token. This provides a good approximation for tracking usage but may not match the exact token count from a specific model's API."
+    answer: "When you log a new turn in a conversation, you can paste the text into the 'LLM Input' and 'LLM Output' fields. The app then estimates the token counts based on a common heuristic where 4 characters roughly equal 1 token. This provides a good approximation for tracking usage but may not match the exact token count from a specific model's API."
   },
   {
-    question: "How are costs calculated?",
-    answer: "On the Settings page, you can define the cost per 1 million input tokens and 1 million output tokens for each of your models. The app uses these custom rates, along with the token counts for each prompt, to automatically calculate and display an estimated cost for your usage. If costs are set to 0, no cost will be calculated."
+    question: "How are costs calculated? (Context-Aware)",
+    answer: "The app calculates cost for each individual turn within a conversation. The cost for a turn is the sum of three parts:\n\n1. Context Cost: The cost of all input and output tokens from all previous turns in the conversation.\n2. Input Cost: The cost of the new input tokens for the current turn.\n3. Output Cost: The cost of the new output tokens for the current turn.\n\nOn the Settings page, you can enable a 'Cache Discount' for each model. If enabled, the Context Cost for each turn is reduced by the specified percentage, simulating the savings from models that offer cached context pricing."
   }
 ];
 

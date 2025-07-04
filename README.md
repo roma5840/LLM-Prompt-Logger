@@ -1,7 +1,7 @@
 <div align="center">
   <img src="./public/favicon.svg" alt="PromptLog Logo" width="80">
   <h1>PromptLog</h1>
-  <p>A sleek, local-first, privacy-focused, and E2EE sync-enabled tool for logging and analyzing your LLM prompts.</p>
+  <p>A sleek, local-first, privacy-focused, and E2EE sync-enabled tool for logging and analyzing your LLM conversations.</p>
 </div>
 
 <div align="center">
@@ -13,20 +13,23 @@
 
 ## About
 
-**PromptLog** is a modern web application designed to help developers, researchers, and AI enthusiasts track and analyze their interactions with Large Language Models (LLMs). It starts as a completely private, browser-based tool and offers a seamless one-click migration to a secure, **end-to-end encrypted** cloud backend for real-time data synchronization across multiple devices.
+**PromptLog** is a modern web application designed to help developers, researchers, and AI enthusiasts track and analyze their interactions with Large Language Models (LLMs). It moves beyond simple prompt logging by organizing interactions into **conversations**, allowing for sophisticated, context-aware cost and usage analysis.
 
-Your privacy is paramount. With E2EE, your prompt data is encrypted on your device using a master password only you know, making it unreadable to the server and anyone else.
+It starts as a completely private, browser-based tool and offers a seamless one-click migration to a secure, **end-to-end encrypted** cloud backend for real-time data synchronization across multiple devices.
+
+Your privacy is paramount. With E2EE, your conversation data is encrypted on your device using a master password only you know, making it unreadable to the server and anyone else.
 
 ## Key Features
 
+*   **Conversation-Centric Logging**: Group your LLM interactions into conversations. Log individual "turns" with detailed notes and token counts.
+*   **Context-Aware Cost Calculation**: Automatically calculates the cost of each turn, factoring in the accumulated tokens from previous turns in the conversation.
+*   **Cache Discount Modeling**: Simulate cost savings from models that offer cached context pricing by enabling a configurable cache discount percentage for each model.
 *   **Local-First & Private**: Your data stays on your device by default using your browser's local storage. No account is needed to get started.
-*   **Optional E2EE Cloud Sync**: Enable cloud sync with a master password. Your data is encrypted on your device via the Web Crypto API before being sent to the cloud. An in-app explanation clearly shows what data is and isn't visible to the server, ensuring full transparency.
+*   **Optional E2EE Cloud Sync**: Enable cloud sync with a master password. Your data is encrypted on your device via the Web Crypto API before being sent to the cloud.
 *   **Seamless Device Linking**: Easily link a new device to your cloud account by scanning a QR code or entering the sync key manually.
-*   **Insightful Dashboard**: Visualize your prompt history with stats on total usage, daily activity, token counts, and a breakdown of which models you use most frequently.
-*   **Conflict Resolution**: An intelligent migration assistant helps resolve conflicts when local notes are too long for encrypted sync, ensuring a smooth transition to the cloud.
-*   **Token Tracking & Calculation**: Log output tokens for your prompts, or paste the LLM's output to get an estimated token count.
-*   **Data Portability**: Full control over your data. Export your entire decrypted prompt history to a JSON file and import it back at any time, whether you're using local or cloud storage.
-*   **Custom Model Management**: The default models are just a starting point. Add, remove, and manage your own list of custom model names.
+*   **Insightful Dashboard**: Visualize your conversation history with stats on total usage, daily activity, and cost analysis over time.
+*   **Data Portability**: Full control over your data. Export your entire decrypted conversation history to a JSON file and import it back at any time.
+*   **Custom Model Management**: The default models are just a starting point. Add, remove, and manage your own list of custom models, including their costs and caching rules.
 *   **Built-in FAQ**: A dedicated FAQ page answers common user questions about privacy, data management, and app features.
 *   **Responsive Design**: A seamless experience on desktop, tablet, and mobile devices.
 
@@ -75,8 +78,8 @@ Follow these instructions to get a copy of the project up and running on your lo
     # .env.local
 
     # Get these from your Supabase project settings > API
-    NEXT_PUBLIC_SUPABASE_URL=your-supabase-project-url
-    NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+    NEXT_PUBLIC_SUPABASE_URL_V2=your-supabase-project-url
+    NEXT_PUBLIC_SUPABASE_ANON_KEY_V2=your-supabase-anon-key
     ```
     > **Note:** The app will work perfectly in local-only mode without this file.
 
@@ -94,15 +97,11 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 ```
 LLM-Prompt-Logger/
-├── docs
-│   └── blueprint.md
-├── public
-│   └── favicon.svg
 ├── src
-│   ├── ai
-│   │   ├── dev.ts
-│   │   └── genkit.ts
 │   ├── app
+│   │   ├── conversation
+│   │   │   └── [id]
+│   │   │       └── page.tsx
 │   │   ├── faq
 │   │   │   └── page.tsx
 │   │   ├── settings
@@ -112,18 +111,16 @@ LLM-Prompt-Logger/
 │   │   └── page.tsx
 │   ├── components
 │   │   ├── ui
-│   │   │   ├── accordion.tsx
-│   │   │   ├── alert-dialog.tsx
-│   │   │   ├── alert.tsx
 │   │   │   ├── ... (and 30+ other UI components)
+│   │   ├── ConversationList.tsx
+│   │   ├── ConversationStarter.tsx
 │   │   ├── E2EEExplanation.tsx
 │   │   ├── MainLayout.tsx
-│   │   ├── MigrationConflictResolver.tsx
-│   │   ├── PromptList.tsx
-│   │   ├── PromptLogger.tsx
 │   │   ├── Stats.tsx
 │   │   ├── theme-provider.tsx
 │   │   ├── ThemeToggle.tsx
+│   │   ├── TurnList.tsx
+│   │   ├── TurnLogger.tsx
 │   │   └── Welcome.tsx
 │   ├── hooks
 │   │   ├── use-data.tsx
@@ -135,16 +132,9 @@ LLM-Prompt-Logger/
 │       ├── supabase.ts
 │       ├── types.ts
 │       └── utils.ts
-├── apphosting.yaml
-├── components.json
+├── ... (config files)
 ├── LICENSE
-├── next.config.ts
-├── package-lock.json
-├── package.json
-├── postcss.config.mjs
-├── README.md
-├── tailwind.config.ts
-└── tsconfig.json
+└── README.md
 ```
 
 </details>
