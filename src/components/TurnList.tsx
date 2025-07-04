@@ -1,15 +1,18 @@
 // src/components/TurnList.tsx
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Turn, Model } from '@/lib/types'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 
 interface TurnListProps {
   turns: Turn[]
   models: Model[]
 }
+
+const TRUNCATE_LIMIT = 350;
 
 const formatCost = (cost: number) => {
   if (cost < 0.000001 && cost > 0) return "<$0.000001";
@@ -19,6 +22,19 @@ const formatCost = (cost: number) => {
 
 export function TurnList({ turns, models }: TurnListProps) {
   const modelMap = useMemo(() => new Map(models.map(m => [m.name, m])), [models])
+  const [expandedTurns, setExpandedTurns] = useState<Set<number>>(new Set());
+
+  const toggleExpand = (turnId: number) => {
+    setExpandedTurns(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(turnId)) {
+            newSet.delete(turnId);
+        } else {
+            newSet.add(turnId);
+        }
+        return newSet;
+    });
+  };
 
   const turnsWithCosts = useMemo(() => {
     let cumulativeInputTokens = 0
@@ -70,29 +86,50 @@ export function TurnList({ turns, models }: TurnListProps) {
 
   return (
     <div className="space-y-4">
-      {turnsWithCosts.map((turn, index) => (
-        <Card key={turn.id}>
-          <CardHeader>
-            <div className="flex justify-between items-start">
-              <CardTitle className="text-lg">Turn {index + 1}: {turn.model}</CardTitle>
-              <Badge variant="secondary">{new Date(turn.timestamp).toLocaleString()}</Badge>
-            </div>
-            <CardDescription className="whitespace-pre-wrap break-words pt-2">{turn.content}</CardDescription>
-          </CardHeader>
-          <CardFooter className="flex justify-between text-sm">
-            <div className="text-muted-foreground">
-              <span>Context: <span className="font-mono">{turn.contextTokens.toLocaleString()}</span></span>
-              <span className="mx-2">|</span>
-              <span>Input: <span className="font-mono">{turn.input_tokens?.toLocaleString() ?? 'N/A'}</span></span>
-              <span className="mx-2">|</span>
-              <span>Output: <span className="font-mono">{turn.output_tokens?.toLocaleString() ?? 'N/A'}</span></span>
-            </div>
-            <div className="font-semibold">
-              Turn Cost: {formatCost(turn.cost)}
-            </div>
-          </CardFooter>
-        </Card>
-      ))}
+      {turnsWithCosts.map((turn, index) => {
+        const isLongContent = turn.content.length > TRUNCATE_LIMIT;
+        const isExpanded = expandedTurns.has(turn.id);
+
+        return (
+          <Card key={turn.id}>
+            <CardHeader>
+              <div className="flex justify-between items-start">
+                <CardTitle className="text-lg">Turn {index + 1}: {turn.model}</CardTitle>
+                <Badge variant="secondary">{new Date(turn.timestamp).toLocaleString()}</Badge>
+              </div>
+              <div className="pt-2">
+                <CardDescription className="whitespace-pre-wrap break-words">
+                  {isLongContent && !isExpanded
+                    ? `${turn.content.substring(0, TRUNCATE_LIMIT)}...`
+                    : turn.content
+                  }
+                </CardDescription>
+                {isLongContent && (
+                  <Button
+                    variant="link"
+                    className="h-auto p-0 mt-2 justify-start text-primary"
+                    onClick={() => toggleExpand(turn.id)}
+                  >
+                    {isExpanded ? 'Read Less' : 'Read More'}
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardFooter className="flex justify-between text-sm">
+              <div className="text-muted-foreground">
+                <span>Context: <span className="font-mono">{turn.contextTokens.toLocaleString()}</span></span>
+                <span className="mx-2">|</span>
+                <span>Input: <span className="font-mono">{turn.input_tokens?.toLocaleString() ?? 'N/A'}</span></span>
+                <span className="mx-2">|</span>
+                <span>Output: <span className="font-mono">{turn.output_tokens?.toLocaleString() ?? 'N/A'}</span></span>
+              </div>
+              <div className="font-semibold">
+                Turn Cost: {formatCost(turn.cost)}
+              </div>
+            </CardFooter>
+          </Card>
+        )
+      })}
     </div>
   )
 }
