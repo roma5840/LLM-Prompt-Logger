@@ -8,7 +8,7 @@ import { SidebarProvider, Sidebar, SidebarTrigger, SidebarContent, SidebarHeader
 import { PromptLogger } from '@/components/PromptLogger'
 import { Welcome } from '@/components/Welcome'
 import { useData } from '@/hooks/use-data'
-import { BotMessageSquare, LayoutDashboard, Settings, Plus, Loader2, Shield } from 'lucide-react'
+import { BotMessageSquare, LayoutDashboard, Settings, Plus, Loader2, Shield, HelpCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   Dialog,
@@ -100,6 +100,7 @@ function NavLinks() {
   const links = [
     { href: '/', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/settings', label: 'Settings', icon: Settings },
+    { href: '/faq', label: 'FAQ', icon: HelpCircle },
   ];
 
   return (
@@ -219,7 +220,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
             </div>
           </SidebarContent>
           <SidebarFooter className="p-4 text-xs text-muted-foreground">
-            Version 1.6.31
+            Version 1.6.32
           </SidebarFooter>
         </Sidebar>
         

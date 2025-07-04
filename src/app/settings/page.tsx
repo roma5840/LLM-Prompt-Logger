@@ -5,6 +5,7 @@ import { useData } from '@/hooks/use-data'
 import { useToast } from '@/hooks/use-toast'
 import { MainLayout } from '@/components/MainLayout'
 import { MigrationConflictResolver } from '@/components/MigrationConflictResolver'
+import { E2EEExplanation } from '@/components/E2EEExplanation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,6 +17,7 @@ import {
   DialogTrigger,
   DialogFooter,
   DialogDescription,
+  DialogClose,
 } from '@/components/ui/dialog'
 import {
   AlertDialog,
@@ -31,9 +33,10 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import QRCode from 'qrcode'
 import { Html5Qrcode } from 'html5-qrcode'
-import { Loader2, AlertTriangle, ShieldCheck, ShieldOff } from 'lucide-react'
+import { Loader2, AlertTriangle, ShieldCheck, ShieldOff, Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Separator } from '@/components/ui/separator'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { Prompt } from '@/lib/types'
 import { LOCAL_HISTORY_STORAGE } from '@/lib/constants'
 
@@ -367,16 +370,48 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="flex flex-col gap-6">
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                <div>
+                <div className="space-y-1">
                   <h3 className="font-medium leading-none flex items-center gap-2">
                     {data.syncKey ? <><ShieldCheck className="h-4 w-4 text-green-600" />E2E Cloud Sync Enabled</> : "Cloud Sync"}
                   </h3>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {data.syncKey 
-                        ? "Your data is encrypted and unreadable by the server." 
-                        : "Enable sync to encrypt and back up your data."
-                    }
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm text-muted-foreground">
+                      {data.syncKey 
+                          ? "Your data is encrypted and unreadable by the server." 
+                          : "Enable sync to encrypt and back up your data."
+                      }
+                    </p>
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button variant="link" size="sm" className="h-auto p-0 text-xs">
+                           <Info className="mr-1 h-3 w-3" /> How it works
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-xl flex flex-col h-[90vh] p-0">
+                        <DialogHeader className="p-6 pb-4">
+                          <DialogTitle className="text-center text-xl">
+                              <div className="mx-auto bg-primary/10 rounded-full p-3 w-fit mb-4">
+                                  <ShieldCheck className="w-10 h-10 text-primary" />
+                              </div>
+                              Your Privacy Comes First
+                          </DialogTitle>
+                          <DialogDescription className="text-center">
+                              Here's how our End-to-End Encryption (E2EE) keeps your data safe.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="flex-1 min-h-0 px-6">
+                          <ScrollArea className="h-full pr-4 -mr-4">
+                            <E2EEExplanation />
+                          </ScrollArea>
+                        </div>
+                        <DialogFooter className="p-6 pt-4 border-t">
+                          <DialogClose asChild>
+                            <Button className="w-full">Got it</Button>
+                          </DialogClose>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-2 shrink-0">
                   {data.syncKey ? (
