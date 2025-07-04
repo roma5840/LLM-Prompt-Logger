@@ -52,13 +52,8 @@ export function TurnList({ turns, models }: TurnListProps) {
       // Calculate cost for this turn's context
       let contextCost = 0
       if (contextTokens > 0) {
-        const contextCostPerToken = model.inputCost / 1_000_000
-        if (model.isCacheEnabled) {
-          const discountMultiplier = 1 - (model.cacheDiscount / 100)
-          contextCost = contextTokens * contextCostPerToken * discountMultiplier
-        } else {
-          contextCost = contextTokens * contextCostPerToken
-        }
+        const contextCostPerToken = (model.isCacheEnabled ? model.cachedInputCost : model.inputCost) / 1_000_000;
+        contextCost = contextTokens * contextCostPerToken;
       }
 
       // Calculate cost for this turn's own I/O

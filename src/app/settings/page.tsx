@@ -34,7 +34,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import QRCode from 'qrcode'
 import { Html5Qrcode } from 'html5-qrcode'
-import { Loader2, AlertTriangle, ShieldCheck, ShieldOff, Info, Trash2, Save, RotateCcw, Percent } from 'lucide-react'
+import { Loader2, AlertTriangle, ShieldCheck, ShieldOff, Info, Trash2, Save, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -73,7 +73,7 @@ export default function SettingsPage() {
   
   const handleAddModel = () => {
     if (newModelName && !editableModels.some(m => m.name === newModelName) && !isModelLimitReached) {
-      const newModel: Model = { name: newModelName, inputCost: 0, outputCost: 0, isCacheEnabled: false, cacheDiscount: 0 };
+      const newModel: Model = { name: newModelName, inputCost: 0, outputCost: 0, isCacheEnabled: false, cachedInputCost: 0 };
       setEditableModels([...editableModels, newModel]);
       setNewModelName('');
     }
@@ -87,15 +87,9 @@ export default function SettingsPage() {
         modelToUpdate[field] = value as boolean;
     } else if (typeof value === 'string' || typeof value === 'number') {
         const stringValue = String(value);
-        let numericValue = parseFloat(stringValue);
-
-        if (field === 'cacheDiscount') {
-            numericValue = Math.max(0, Math.min(100, numericValue));
-        } else {
-            numericValue = Math.max(0, numericValue);
-        }
+        const numericValue = parseFloat(stringValue);
         
-        (modelToUpdate as any)[field] = (stringValue === '' || isNaN(numericValue)) ? 0 : numericValue;
+        (modelToUpdate as any)[field] = (stringValue === '' || isNaN(numericValue)) ? 0 : Math.max(0, numericValue);
     }
     
     updatedModels[index] = modelToUpdate;
@@ -357,7 +351,7 @@ export default function SettingsPage() {
                   <Label className="text-muted-foreground font-normal text-sm">Input Cost / 1M ($)</Label>
                   <Label className="text-muted-foreground font-normal text-sm">Output Cost / 1M ($)</Label>
                   <Label className="text-muted-foreground font-normal text-sm text-center">Cache</Label>
-                  <Label className="text-muted-foreground font-normal text-sm">Discount</Label>
+                  <Label className="text-muted-foreground font-normal text-sm">Cached Cost / 1M ($)</Label>
                   <div className="w-[40px]"></div>
               </div>
 
@@ -385,11 +379,8 @@ export default function SettingsPage() {
                     </div>
 
                     <div className="space-y-1 md:space-y-0">
-                        <Label htmlFor={`cache-discount-${index}`} className="text-xs font-medium text-muted-foreground md:hidden">Cache Discount</Label>
-                        <div className="relative">
-                            <Input id={`cache-discount-${index}`} type="number" min="0" max="100" value={model.cacheDiscount || ''} onChange={e => handleUpdateModel(index, 'cacheDiscount', e.target.value)} placeholder="0" className="pr-7" disabled={!model.isCacheEnabled}/>
-                            <Percent className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        </div>
+                        <Label htmlFor={`cached-input-cost-${index}`} className="text-xs font-medium text-muted-foreground md:hidden">Cached Cost / 1M ($)</Label>
+                        <Input id={`cached-input-cost-${index}`} type="number" step="0.0001" min="0" value={model.cachedInputCost || ''} onChange={e => handleUpdateModel(index, 'cachedInputCost', e.target.value)} placeholder="0" disabled={!model.isCacheEnabled}/>
                     </div>
 
                     <div className="flex justify-end md:justify-center">

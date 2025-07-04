@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, LineChart, Line, CartesianGrid, Cell } from 'recharts'
-import { Conversation, Model, Message } from '@/lib/types'
+import { Conversation, Model, Turn } from '@/lib/types'
 import { useMemo } from 'react'
 
 interface StatsProps {
@@ -42,34 +42,59 @@ const formatCost = (cost: number) => {
 
 export function Stats({ conversations, models }: StatsProps) {
   const modelCostMap = useMemo(() => {
-    const map = new Map<string, { inputCost: number; outputCost: number }>();
+    const map = new Map<string, Model>();
     models.forEach(model => {
-      map.set(model.name, { inputCost: model.inputCost, outputCost: model.outputCost });
+      map.set(model.name, model);
     });
     return map;
   }, [models]);
 
   const allMessages = useMemo(() => conversations.flatMap(c => c.messages), [conversations]);
 
-  const calculateCost = (messages: Message[]) => {
-    return messages.reduce((total, msg) => {
-        const costs = modelCostMap.get(msg.model);
-        if (!costs) return total;
-
-        const inputCost = (msg.input_tokens || 0) / 1_000_000 * costs.inputCost;
-        const outputCost = (msg.output_tokens || 0) / 1_000_000 * costs.outputCost;
+  const allTurnsWithCosts = useMemo(() => {
+    const turnsWithCosts: (Turn & { cost: number })[] = [];
+    conversations.forEach(convo => {
+      let cumulativeInputTokens = 0;
+      let cumulativeOutputTokens = 0;
+      convo.messages.forEach(turn => {
+        const model = modelCostMap.get(turn.model);
+        if (!model) {
+          turnsWithCosts.push({ ...turn, cost: 0 });
+          return;
+        }
         
-        return total + inputCost + outputCost;
-    }, 0);
-  };
+        let turnCost = 0;
+        const contextTokens = cumulativeInputTokens + cumulativeOutputTokens;
+        
+        // Context cost
+        if (contextTokens > 0) {
+          const contextCostPerToken = (model.isCacheEnabled ? model.cachedInputCost : model.inputCost) / 1_000_000;
+          turnCost += contextTokens * contextCostPerToken;
+        }
+
+        // Turn I/O cost
+        const turnInputTokens = turn.input_tokens || 0;
+        const turnOutputTokens = turn.output_tokens || 0;
+        turnCost += turnInputTokens * (model.inputCost / 1_000_000);
+        turnCost += turnOutputTokens * (model.outputCost / 1_000_000);
+
+        turnsWithCosts.push({ ...turn, cost: turnCost });
+
+        // Update cumulative tokens for the next turn in this convo
+        cumulativeInputTokens += turnInputTokens;
+        cumulativeOutputTokens += turnOutputTokens;
+      });
+    });
+    return turnsWithCosts;
+  }, [conversations, modelCostMap]);
   
   const totalConversations = conversations.length;
   const totalMessages = allMessages.length;
   const dailyMessages = allMessages.filter(m => new Date(m.timestamp) >= getStartOfToday()).length;
   
-  const totalCost = useMemo(() => calculateCost(allMessages), [allMessages, modelCostMap]);
-  const dailyCost = useMemo(() => calculateCost(allMessages.filter(p => new Date(p.timestamp) >= getStartOfToday())), [allMessages, modelCostMap]);
-  const monthlyCost = useMemo(() => calculateCost(allMessages.filter(p => new Date(p.timestamp) >= getStartOfMonth())), [allMessages, modelCostMap]);
+  const totalCost = useMemo(() => allTurnsWithCosts.reduce((sum, turn) => sum + turn.cost, 0), [allTurnsWithCosts]);
+  const dailyCost = useMemo(() => allTurnsWithCosts.filter(t => new Date(t.timestamp) >= getStartOfToday()).reduce((sum, turn) => sum + turn.cost, 0), [allTurnsWithCosts]);
+  const monthlyCost = useMemo(() => allTurnsWithCosts.filter(t => new Date(t.timestamp) >= getStartOfMonth()).reduce((sum, turn) => sum + turn.cost, 0), [allTurnsWithCosts]);
 
 
   const dailyUsage = useMemo(() => {
@@ -89,7 +114,7 @@ export function Stats({ conversations, models }: StatsProps) {
     }
     
     return last14Days.map(date => {
-      const dateKey = date.toLocaleDate-String('en-CA');
+      const dateKey = date.toLocaleDateString('en-CA');
       const displayDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       return {
         date: displayDate,

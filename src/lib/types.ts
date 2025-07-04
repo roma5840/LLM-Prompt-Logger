@@ -24,7 +24,7 @@ export interface Model {
   inputCost: number;
   outputCost: number;
   isCacheEnabled: boolean;
-  cacheDiscount: number;
+  cachedInputCost: number;
 }
 
 export interface ImportConflict {
