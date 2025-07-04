@@ -31,7 +31,7 @@ export function E2EEExplanation() {
             </div>
             <div>
               <p className="font-medium text-card-foreground">2. Data is Encrypted on Your Device</p>
-              <p className="text-muted-foreground">Before your prompt notes are saved, they are scrambled into unreadable ciphertext using your encryption key.</p>
+              <p className="text-muted-foreground">Before your prompt notes and token counts are saved, they are scrambled into unreadable ciphertext using your encryption key.</p>
             </div>
           </div>
 
@@ -64,7 +64,7 @@ export function E2EEExplanation() {
           </h3>
           <ul className="list-disc list-inside mt-2 text-muted-foreground space-y-1">
             <li>The content of your prompt notes</li>
-            <li>Your calculated output tokens</li>
+            <li>Your input and output token counts</li>
             <li>Your Master Password</li>
           </ul>
         </div>
@@ -73,14 +73,14 @@ export function E2EEExplanation() {
             What We CAN See
           </h3>
           <ul className="list-disc list-inside mt-2 text-muted-foreground space-y-1">
-            <li>The model names you use</li>
+            <li>The model names you use and their configured costs</li>
             <li>The timestamp of each prompt</li>
             <li>One-way hashes of your password for verification (cannot be reversed to find your password)</li>
           </ul>
         </div>
       </div>
       <p className="text-xs text-center text-muted-foreground pt-2">
-        This minimal metadata is necessary for the app to function (e.g., sorting prompts by date) but does not expose your private content.
+        This minimal metadata is necessary for the app to function (e.g., sorting prompts and calculating costs) but does not expose your private content.
       </p>
     </div>
   )

@@ -12,11 +12,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 const faqData = [
   {
     question: "What is PromptLog?",
-    answer: "PromptLog is a personal, privacy-focused application designed to help you log, analyze, and manage your interactions with Large Language Models (LLMs). It allows you to save notes, track token usage, and visualize your activity over time, all while keeping your data secure."
+    answer: "PromptLog is a personal, privacy-focused application designed to help you log, analyze, and manage your interactions with Large Language Models (LLMs). It allows you to save notes, track input/output token usage, estimate costs, and visualize your activity over time, all while keeping your data secure."
   },
   {
     question: "Is my data private and secure?",
-    answer: "Yes. Security is our top priority. The app operates in two modes: \n\n1. Local-Only: By default, all your data is stored directly on your device in your browser's local storage. It never leaves your computer.\n\n2. E2E Encrypted Sync: If you choose to enable cloud sync, your data is end-to-end encrypted. This means your private data (like prompt notes) is encrypted on your device using a Master Password that only you know. The server only stores the encrypted, unreadable data. We cannot access your notes."
+    answer: "Yes. Security is our top priority. The app operates in two modes: \n\n1. Local-Only: By default, all your data is stored directly on your device in your browser's local storage. It never leaves your computer.\n\n2. E2E Encrypted Sync: If you choose to enable cloud sync, your data is end-to-end encrypted. This means your private data (like prompt notes, input tokens, and output tokens) is encrypted on your device using a Master Password that only you know. The server only stores the encrypted, unreadable data. We cannot access your sensitive information."
   },
   {
     question: "What happens if I forget my Master Password?",
@@ -24,7 +24,7 @@ const faqData = [
   },
   {
     question: "How does cloud sync work?",
-    answer: "When you enable cloud sync, you create a Master Password. This password is used to derive an encryption key on your device. Your prompt notes and token counts are then encrypted with this key before being sent to our secure cloud storage (hosted on Supabase). This ensures that even we cannot read your sensitive data."
+    answer: "When you enable cloud sync, you create a Master Password. This password is used to derive an encryption key on your device. Your prompt notes, input token counts, and output token counts are then encrypted with this key before being sent to our secure cloud storage (hosted on Supabase). This ensures that even we cannot read your sensitive data."
   },
   {
     question: "Can I use this app offline?",
@@ -43,8 +43,12 @@ const faqData = [
     answer: "To be transparent, this is a hobby project and running a sync server has real costs. To keep the E2E Encrypted Sync feature available for everyone to try, synced notes are limited to 1,500 characters. Notes stored only locally on your device have no limit."
   },
   {
-    question: "How are output tokens calculated?",
-    answer: "The token count is an estimate calculated based on the length of the text you paste into the 'LLM Output' field. It uses a common heuristic where 4 characters roughly equal 1 token. This provides a good approximation for tracking usage but may not match the exact token count from a specific model's API."
+    question: "How are token counts calculated?",
+    answer: "The token counts are estimates calculated based on the length of the text you paste into the 'LLM Input' and 'LLM Output' fields. It uses a common heuristic where 4 characters roughly equal 1 token. This provides a good approximation for tracking usage but may not match the exact token count from a specific model's API."
+  },
+  {
+    question: "How are costs calculated?",
+    answer: "On the Settings page, you can define the cost per 1 million input tokens and 1 million output tokens for each of your models. The app uses these custom rates, along with the token counts for each prompt, to automatically calculate and display an estimated cost for your usage. If costs are set to 0, no cost will be calculated."
   }
 ];
 
