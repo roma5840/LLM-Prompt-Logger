@@ -3,9 +3,14 @@ export interface Prompt {
   bucket_id?: string;
   model: string;
   note: string;
+  input_tokens: number | null;
   output_tokens: number | null;
   timestamp: Date;
   is_local_only?: boolean;
 }
 
-export type Model = string;
+export interface Model {
+  name: string;
+  inputCost: number; // Cost per 1,000,000 tokens
+  outputCost: number; // Cost per 1,000,000 tokens
+}

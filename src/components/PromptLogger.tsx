@@ -17,9 +17,10 @@ import { useData } from '@/hooks/use-data'
 import { cn } from '@/lib/utils'
 import { Loader2, ChevronsUpDown } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible'
+import { Label } from './ui/label'
 
 interface PromptLoggerProps {
-  addPrompt: (model: string, note: string, outputTokens: number | null) => Promise<void>
+  addPrompt: (model: string, note: string, inputTokens: number | null, outputTokens: number | null) => Promise<void>
   models: Model[]
   onPromptLogged?: () => void
   isSubmitting: boolean
@@ -29,16 +30,18 @@ interface PromptLoggerProps {
 export function PromptLogger({ addPrompt, models, onPromptLogged, isSubmitting, setIsSubmitting }: PromptLoggerProps) {
   const [selectedModel, setSelectedModel] = useState('')
   const [note, setNote] = useState('')
+  const [inputText, setInputText] = useState('')
   const [outputText, setOutputText] = useState('')
+  const [isInputOpen, setIsInputOpen] = useState(false)
   const [isOutputOpen, setIsOutputOpen] = useState(false)
   const { toast } = useToast()
   const { noteCharacterLimit } = useData()
   
-  const outputTokens = useMemo(() => {
-    if (!outputText) return 0;
-    // A common heuristic for token count is 1 token ~ 4 characters.
-    return Math.ceil(outputText.length / 4);
-  }, [outputText]);
+  // A common heuristic for token count is 1 token ~ 4 characters.
+  const tokenHeuristic = (text: string) => Math.ceil(text.length / 4);
+
+  const inputTokens = useMemo(() => tokenHeuristic(inputText), [inputText]);
+  const outputTokens = useMemo(() => tokenHeuristic(outputText), [outputText]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -53,8 +56,14 @@ export function PromptLogger({ addPrompt, models, onPromptLogged, isSubmitting, 
 
     setIsSubmitting(true)
     try {
-      await addPrompt(selectedModel, note, outputTokens > 0 ? outputTokens : null)
+      await addPrompt(
+        selectedModel, 
+        note, 
+        inputTokens > 0 ? inputTokens : null,
+        outputTokens > 0 ? outputTokens : null
+      )
       setNote('')
+      setInputText('')
       setOutputText('')
       onPromptLogged?.()
     } catch (error: any) {
@@ -77,19 +86,21 @@ export function PromptLogger({ addPrompt, models, onPromptLogged, isSubmitting, 
           </SelectTrigger>
           <SelectContent>
             {models.map(model => (
-              <SelectItem key={model} value={model}>
-                {model}
+              <SelectItem key={model.name} value={model.name}>
+                {model.name}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
       <div className="grid gap-2">
+        <Label htmlFor="prompt-notes">Notes / Tags</Label>
         <Textarea
+          id="prompt-notes"
           value={note}
           onChange={e => setNote(e.target.value)}
-          placeholder="Enter prompt notes or tags..."
-          rows={7}
+          placeholder="Add any notes, tags, or a summary for this log..."
+          rows={5}
           maxLength={noteCharacterLimit ?? undefined}
           disabled={isSubmitting}
         />
@@ -101,23 +112,49 @@ export function PromptLogger({ addPrompt, models, onPromptLogged, isSubmitting, 
           {noteCharacterLimit ? ` / ${noteCharacterLimit.toLocaleString()}` : ' characters'}
         </div>
       </div>
-      <Collapsible open={isOutputOpen} onOpenChange={setIsOutputOpen} className="grid gap-2">
+
+      <Collapsible open={isInputOpen} onOpenChange={setIsInputOpen} className="grid gap-2">
         <div className="flex items-center justify-between -mb-2">
             <CollapsibleTrigger asChild>
                 <Button variant="ghost" size="sm" className="text-sm px-2 -ml-2">
                     <ChevronsUpDown className="h-4 w-4 mr-2" />
-                    Add LLM Output (Optional)
+                    Add LLM Input (for token count)
                 </Button>
             </CollapsibleTrigger>
-            {isOutputOpen && (
+            {isInputOpen && (
               <span className="text-xs text-muted-foreground">
-                  ~{outputTokens} tokens
+                  ~{inputTokens.toLocaleString()} input tokens
               </span>
             )}
         </div>
         <CollapsibleContent className="space-y-2 pt-2">
             <Textarea 
-                placeholder="Paste the model's output here to count tokens..."
+                placeholder="Paste the original prompt text here to count input tokens..."
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                rows={5}
+                disabled={isSubmitting}
+            />
+        </CollapsibleContent>
+      </Collapsible>
+
+      <Collapsible open={isOutputOpen} onOpenChange={setIsOutputOpen} className="grid gap-2">
+        <div className="flex items-center justify-between -mb-2">
+            <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm" className="text-sm px-2 -ml-2">
+                    <ChevronsUpDown className="h-4 w-4 mr-2" />
+                    Add LLM Output (for token count)
+                </Button>
+            </CollapsibleTrigger>
+            {isOutputOpen && (
+              <span className="text-xs text-muted-foreground">
+                  ~{outputTokens.toLocaleString()} output tokens
+              </span>
+            )}
+        </div>
+        <CollapsibleContent className="space-y-2 pt-2">
+            <Textarea 
+                placeholder="Paste the model's output here to count output tokens..."
                 value={outputText}
                 onChange={(e) => setOutputText(e.target.value)}
                 rows={5}

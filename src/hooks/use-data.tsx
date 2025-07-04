@@ -16,8 +16,8 @@ interface DataContextType {
   syncing: boolean;
   isLocked: boolean;
   noteCharacterLimit: number | null;
-  addPrompt: (model: string, note: string, outputTokens: number | null) => Promise<void>;
-  updatePrompt: (id: number, note: string, outputTokens: number | null) => Promise<void>;
+  addPrompt: (model: string, note: string, inputTokens: number | null, outputTokens: number | null) => Promise<void>;
+  updatePrompt: (id: number, note: string, inputTokens: number | null, outputTokens: number | null) => Promise<void>;
   deletePrompt: (id: number) => Promise<void>;
   deleteAllPrompts: () => Promise<void>;
   deleteAccount: () => Promise<void>;
@@ -129,13 +129,15 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       encryptedHistory.map(async (p: any) => {
         try {
           const decryptedNote = p.note ? await decrypt(p.note, key) : '';
-          const decryptedTokensStr = p.output_tokens ? await decrypt(p.output_tokens, key) : null;
-          const output_tokens = decryptedTokensStr ? parseInt(decryptedTokensStr, 10) : null;
+          const decryptedInputTokensStr = p.input_tokens ? await decrypt(p.input_tokens, key) : null;
+          const decryptedOutputTokensStr = p.output_tokens ? await decrypt(p.output_tokens, key) : null;
+          const input_tokens = decryptedInputTokensStr ? parseInt(decryptedInputTokensStr, 10) : null;
+          const output_tokens = decryptedOutputTokensStr ? parseInt(decryptedOutputTokensStr, 10) : null;
 
-          return { ...p, note: decryptedNote, output_tokens, timestamp: new Date(p.timestamp) };
+          return { ...p, note: decryptedNote, input_tokens, output_tokens, timestamp: new Date(p.timestamp) };
         } catch (e) {
           console.error(`Failed to decrypt prompt id ${p.id}. It may be corrupted.`, e);
-          return { ...p, note: '[DECRYPTION FAILED]', output_tokens: null, timestamp: new Date(p.timestamp) };
+          return { ...p, note: '[DECRYPTION FAILED]', input_tokens: null, output_tokens: null, timestamp: new Date(p.timestamp) };
         }
       })
     );
@@ -293,7 +295,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [syncKey, encryptionKey, isLocked, refreshDataFromSupabase, unlinkDevice]);
 
-  const addPrompt = async (model: string, note: string, outputTokens: number | null) => {
+  const addPrompt = async (model: string, note: string, inputTokens: number | null, outputTokens: number | null) => {
     if (syncKey) {
       if (!encryptionKey || !masterPassword) throw new Error("App is locked. Cannot add prompt.");
       
@@ -302,16 +304,18 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       const token = await getAccessToken(masterPassword, salt);
       
       const encryptedNote = await encrypt(note, encryptionKey);
-      const encryptedTokens = outputTokens !== null ? await encrypt(String(outputTokens), encryptionKey) : null;
+      const encryptedInputTokens = inputTokens !== null ? await encrypt(String(inputTokens), encryptionKey) : null;
+      const encryptedOutputTokens = outputTokens !== null ? await encrypt(String(outputTokens), encryptionKey) : null;
       
-      const optimisticPrompt: Prompt = { id: Date.now(), bucket_id: syncKey, model, note, output_tokens: outputTokens, timestamp: new Date() }
+      const optimisticPrompt: Prompt = { id: Date.now(), bucket_id: syncKey, model, note, input_tokens: inputTokens, output_tokens: outputTokens, timestamp: new Date() }
       setHistory(prev => [optimisticPrompt, ...prev])
       
       const { error } = await supabase.rpc('add_new_prompt', { 
           p_bucket_id: syncKey, 
           p_model: model, 
-          p_note: encryptedNote, 
-          p_output_tokens: encryptedTokens,
+          p_note: encryptedNote,
+          p_input_tokens: encryptedInputTokens,
+          p_output_tokens: encryptedOutputTokens,
           p_access_token: token
       })
       if (error) {
@@ -322,19 +326,19 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         await broadcastChange('prompts_changed');
       }
     } else {
-      const newPrompt: Prompt = { id: Date.now() + Math.random(), model, note, output_tokens: outputTokens, timestamp: new Date() }
+      const newPrompt: Prompt = { id: Date.now() + Math.random(), model, note, input_tokens: inputTokens, output_tokens: outputTokens, timestamp: new Date() }
       setHistory(prev => [newPrompt, ...prev])
     }
   }
 
-  const updatePrompt = async (promptId: number, newNote: string, newOutputTokens: number | null) => {
+  const updatePrompt = async (promptId: number, newNote: string, newIntputTokens: number | null, newOutputTokens: number | null) => {
     const targetPrompt = mergedHistory.find(p => p.id === promptId);
     if (!targetPrompt) return;
 
     if (targetPrompt.is_local_only) {
-      setLocalOnlyHistory(prev => prev.map(p => p.id === promptId ? { ...p, note: newNote, output_tokens: newOutputTokens } : p));
+      setLocalOnlyHistory(prev => prev.map(p => p.id === promptId ? { ...p, note: newNote, input_tokens: newIntputTokens, output_tokens: newOutputTokens } : p));
     } else {
-      setHistory(prev => prev.map(p => p.id === promptId ? { ...p, note: newNote, output_tokens: newOutputTokens } : p));
+      setHistory(prev => prev.map(p => p.id === promptId ? { ...p, note: newNote, input_tokens: newIntputTokens, output_tokens: newOutputTokens } : p));
       if (syncKey) {
         if (!encryptionKey || !masterPassword) throw new Error("App is locked. Cannot update prompt.");
         
@@ -343,13 +347,15 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         const token = await getAccessToken(masterPassword, salt);
 
         const encryptedNote = await encrypt(newNote, encryptionKey);
-        const encryptedTokens = newOutputTokens !== null ? await encrypt(String(newOutputTokens), encryptionKey) : null;
+        const encryptedInputTokens = newIntputTokens !== null ? await encrypt(String(newIntputTokens), encryptionKey) : null;
+        const encryptedOutputTokens = newOutputTokens !== null ? await encrypt(String(newOutputTokens), encryptionKey) : null;
 
         const { error } = await supabase.rpc('update_my_prompt', { 
           p_prompt_id: promptId, 
           p_bucket_id: syncKey, 
           p_new_note: encryptedNote,
-          p_new_output_tokens: encryptedTokens,
+          p_new_input_tokens: encryptedInputTokens,
+          p_new_output_tokens: encryptedOutputTokens,
           p_access_token: token
         })
         if (error) {
@@ -456,7 +462,8 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       const newAccessToken = await getAccessToken(password, salt);
       const accessTokenHash = await hashAccessToken(newAccessToken);
 
-      const localModels = JSON.parse(localStorage.getItem(LOCAL_MODELS_STORAGE) || JSON.stringify(DEFAULT_MODELS));
+      const localModelsRaw = localStorage.getItem(LOCAL_MODELS_STORAGE);
+      const localModels: Model[] = localModelsRaw ? JSON.parse(localModelsRaw) : DEFAULT_MODELS;
 
       const { data: newKey, error: createError } = await supabase.rpc('create_new_bucket', { 
         p_models: localModels, 
@@ -471,11 +478,13 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       if (notesToMigrate.length > 0) {
         const encryptedHistoryBatch = await Promise.all(notesToMigrate.map(async (entry: any) => {
             const encryptedNote = await encrypt(entry.note || '', derivedKey);
-            const encryptedTokens = entry.output_tokens !== null ? await encrypt(String(entry.output_tokens), derivedKey) : null;
+            const encryptedInputTokens = entry.input_tokens !== null ? await encrypt(String(entry.input_tokens), derivedKey) : null;
+            const encryptedOutputTokens = entry.output_tokens !== null ? await encrypt(String(entry.output_tokens), derivedKey) : null;
             return {
                 model: entry.model,
                 note: encryptedNote,
-                output_tokens: encryptedTokens,
+                input_tokens: encryptedInputTokens,
+                output_tokens: encryptedOutputTokens,
                 timestamp: new Date(entry.timestamp).toISOString()
             };
         }));
@@ -579,7 +588,13 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     }
     const dataToExport = {
         models: models,
-        history: mergedHistory.map(p => ({ model: p.model, note: p.note, output_tokens: p.output_tokens, timestamp: new Date(p.timestamp).toISOString() }))
+        history: mergedHistory.map(p => ({ 
+          model: p.model, 
+          note: p.note, 
+          input_tokens: p.input_tokens,
+          output_tokens: p.output_tokens, 
+          timestamp: new Date(p.timestamp).toISOString() 
+        }))
     };
 
     const dataStr = JSON.stringify(dataToExport, null, 2);
@@ -604,8 +619,24 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     try {
         const text = await file.text()
         const importedData = JSON.parse(text)
-        if (!importedData || !Array.isArray(importedData.models) || !Array.isArray(importedData.history)) {
+        
+        const isValidModels = (models: any): models is Model[] => {
+          return Array.isArray(models) && models.every(m => typeof m === 'object' && m !== null && 'name' in m && 'inputCost' in m && 'outputCost' in m);
+        }
+
+        const isOldModels = (models: any): models is string[] => {
+            return Array.isArray(models) && models.every(m => typeof m === 'string');
+        }
+
+        if (!importedData || !Array.isArray(importedData.history) || (!isValidModels(importedData.models) && !isOldModels(importedData.models))) {
             throw new Error('Invalid file format.');
+        }
+
+        let finalModels: Model[];
+        if (isOldModels(importedData.models)) {
+            finalModels = importedData.models.map(name => ({ name, inputCost: 0, outputCost: 0 }));
+        } else {
+            finalModels = importedData.models;
         }
         
         if (syncKey) {
@@ -624,16 +655,18 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             }
             
             await supabase.rpc('delete_all_my_prompts', { p_bucket_id: syncKey, p_access_token: token })
-            await supabase.rpc('update_my_models', { p_bucket_id: syncKey, p_new_models: importedData.models, p_access_token: token })
+            await supabase.rpc('update_my_models', { p_bucket_id: syncKey, p_new_models: finalModels, p_access_token: token })
             
             if (importedData.history.length > 0) {
                 const encryptedHistoryBatch = await Promise.all(importedData.history.map(async (entry: any) => {
                     const encryptedNote = await encrypt(entry.note || '', encryptionKey);
-                    const encryptedTokens = entry.output_tokens !== null ? await encrypt(String(entry.output_tokens), encryptionKey) : null;
+                    const encryptedInputTokens = entry.input_tokens !== null ? await encrypt(String(entry.input_tokens), encryptionKey) : null;
+                    const encryptedOutputTokens = entry.output_tokens !== null ? await encrypt(String(entry.output_tokens), encryptionKey) : null;
                     return {
                         model: entry.model,
                         note: encryptedNote,
-                        output_tokens: encryptedTokens,
+                        input_tokens: encryptedInputTokens,
+                        output_tokens: encryptedOutputTokens,
                         timestamp: new Date(entry.timestamp).toISOString()
                     };
                 }));
@@ -652,11 +685,13 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             await refreshDataFromSupabase(syncKey, encryptionKey)
 
         } else {
-            setModels(importedData.models)
+            setModels(finalModels)
             setHistory(importedData.history.map((entry: any) => ({
                 ...entry,
                 id: Date.now() + Math.random(),
-                timestamp: new Date(entry.timestamp)
+                timestamp: new Date(entry.timestamp),
+                input_tokens: entry.input_tokens ?? null,
+                output_tokens: entry.output_tokens ?? null,
             })).sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()))
         }
     } catch (error: any) {

@@ -15,6 +15,11 @@ const getStartOfToday = () => {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
+const getStartOfMonth = () => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+}
+
 const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
 
 const CustomModelTooltip = ({ active, payload, label }: any) => {
@@ -62,16 +67,42 @@ const formatLargeNumber = (num: number): string => {
   return num.toLocaleString();
 };
 
+const formatCost = (cost: number) => {
+    if (cost < 0.0001 && cost > 0) return "<$0.0001";
+    return `$${cost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
+};
+
 
 export function Stats({ history, models }: StatsProps) {
+  const modelCostMap = useMemo(() => {
+    const map = new Map<string, { inputCost: number; outputCost: number }>();
+    models.forEach(model => {
+      map.set(model.name, { inputCost: model.inputCost, outputCost: model.outputCost });
+    });
+    return map;
+  }, [models]);
+
+  const calculateCost = (prompts: Prompt[]) => {
+    return prompts.reduce((acc, p) => {
+      const costs = modelCostMap.get(p.model);
+      if (!costs) return acc;
+      const inputCost = (p.input_tokens || 0) / 1_000_000 * costs.inputCost;
+      const outputCost = (p.output_tokens || 0) / 1_000_000 * costs.outputCost;
+      return acc + inputCost + outputCost;
+    }, 0);
+  };
+  
   const totalPrompts = history.length
   const dailyPrompts = history.filter(p => new Date(p.timestamp) >= getStartOfToday()).length
-  const totalOutputTokens = useMemo(() => history.reduce((acc, p) => acc + (p.output_tokens || 0), 0), [history]);
+  
+  const totalCost = useMemo(() => calculateCost(history), [history, modelCostMap]);
+  const dailyCost = useMemo(() => calculateCost(history.filter(p => new Date(p.timestamp) >= getStartOfToday())), [history, modelCostMap]);
+  const monthlyCost = useMemo(() => calculateCost(history.filter(p => new Date(p.timestamp) >= getStartOfMonth())), [history, modelCostMap]);
 
   const modelColorMap = useMemo(() => {
     const map = new Map<string, string>();
     models.forEach((model, i) => {
-        map.set(model, COLORS[i % COLORS.length]);
+        map.set(model.name, COLORS[i % COLORS.length]);
     });
     return map;
   }, [models]);
@@ -83,14 +114,14 @@ export function Stats({ history, models }: StatsProps) {
   const modelCounts = useMemo(() => {
     const counts: { [key: string]: number } = {}
     models.forEach(model => {
-      counts[model] = 0
+      counts[model.name] = 0
     })
     history.forEach(prompt => {
       if (counts[prompt.model] !== undefined) {
         counts[prompt.model]++
       }
     })
-    return models.map(model => ({ name: model, count: counts[model] })).filter(m => m.count > 0);
+    return models.map(model => ({ name: model.name, count: counts[model.name] })).filter(m => m.count > 0);
   }, [history, models])
   
   const barChartHeight = modelCounts.length > 0 ? Math.max(150, modelCounts.length * 35) : 150;
@@ -150,10 +181,26 @@ export function Stats({ history, models }: StatsProps) {
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>Total Output Tokens</CardTitle>
+          <CardTitle>Total Cost</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-4xl font-bold">{formatLargeNumber(totalOutputTokens)}</p>
+          <p className="text-4xl font-bold">{formatCost(totalCost)}</p>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Cost Today</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-4xl font-bold">{formatCost(dailyCost)}</p>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Cost This Month</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-4xl font-bold">{formatCost(monthlyCost)}</p>
         </CardContent>
       </Card>
       <Card className="md:col-span-2 lg:col-span-3">

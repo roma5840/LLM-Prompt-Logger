@@ -2,7 +2,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Prompt } from '@/lib/types'
+import { Prompt, Model } from '@/lib/types'
 import { useData } from '@/hooks/use-data'
 import { Button } from '@/components/ui/button'
 import {
@@ -34,15 +34,16 @@ import { MoreHorizontal, ChevronsUpDown, Trash2, CloudOff } from 'lucide-react'
 import { Skeleton } from './ui/skeleton'
 import { cn } from '@/lib/utils'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible'
+import { Label } from './ui/label'
 
 interface PromptListProps {
   loading: boolean
   history: Prompt[]
   deletePrompt: (id: number) => void
-  updatePrompt: (id: number, note: string, outputTokens: number | null) => void
+  updatePrompt: (id: number, note: string, inputTokens: number | null, outputTokens: number | null) => void
 }
 
-const ITEMS_PER_PAGE = 10
+const ITEMS_PER_PAGE = 10;
 const NOTE_TRUNCATE_LENGTH = 100;
 
 const DOTS = '...';
@@ -96,6 +97,13 @@ const usePagination = ({
   return paginationRange;
 };
 
+const formatCost = (cost: number) => {
+    if (cost < 0.000001 && cost > 0) return "<$0.000001";
+    if (cost === 0) return "N/A";
+    return `$${cost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}`;
+};
+
+const tokenHeuristic = (text: string) => Math.ceil(text.length / 4);
 
 export function PromptList({
   loading,
@@ -106,13 +114,26 @@ export function PromptList({
   const [currentPage, setCurrentPage] = useState(1)
   const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null)
   
-  const { noteCharacterLimit } = useData();
+  const { models, noteCharacterLimit } = useData();
+
+  const modelCostMap = useMemo(() => {
+    const map = new Map<string, { inputCost: number; outputCost: number }>();
+    models.forEach(model => {
+      map.set(model.name, { inputCost: model.inputCost, outputCost: model.outputCost });
+    });
+    return map;
+  }, [models]);
 
   // State for the edit dialog
   const [editedNote, setEditedNote] = useState('')
-  const [editedTokens, setEditedTokens] = useState<number | null>(null)
+  const [editedInputTokens, setEditedInputTokens] = useState<number | null>(null)
+  const [editedOutputTokens, setEditedOutputTokens] = useState<number | null>(null)
+  
+  const [isInputOpen, setIsInputOpen] = useState(false)
   const [isOutputOpen, setIsOutputOpen] = useState(false)
-  const [outputText, setOutputText] = useState('')
+  
+  const [inputTextForRecalc, setInputTextForRecalc] = useState('')
+  const [outputTextForRecalc, setOutputTextForRecalc] = useState('')
 
   const paginatedHistory = history.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
@@ -126,38 +147,54 @@ export function PromptList({
     totalCount: history.length,
     pageSize: ITEMS_PER_PAGE,
   });
+  
+  const recalculatedInputTokens = useMemo(() => {
+    if (!inputTextForRecalc) return 0;
+    return tokenHeuristic(inputTextForRecalc);
+  }, [inputTextForRecalc]);
 
-  const calculatedTokens = useMemo(() => {
-    if (!outputText) return 0;
-    // A common heuristic for token count is 1 token ~ 4 characters.
-    return Math.ceil(outputText.length / 4);
-  }, [outputText]);
+  const recalculatedOutputTokens = useMemo(() => {
+    if (!outputTextForRecalc) return 0;
+    return tokenHeuristic(outputTextForRecalc);
+  }, [outputTextForRecalc]);
 
   const handleEdit = (prompt: Prompt) => {
     setEditingPrompt(prompt)
     setEditedNote(prompt.note)
-    setEditedTokens(prompt.output_tokens)
-    setOutputText('')
+    setEditedInputTokens(prompt.input_tokens)
+    setEditedOutputTokens(prompt.output_tokens)
+    setInputTextForRecalc('')
+    setOutputTextForRecalc('')
+    setIsInputOpen(false)
     setIsOutputOpen(false)
   }
 
   const handleSaveEdit = () => {
     if (editingPrompt) {
-      updatePrompt(editingPrompt.id, editedNote, editedTokens)
-      setEditingPrompt(null)
+        updatePrompt(editingPrompt.id, editedNote, editedInputTokens, editedOutputTokens)
+        setEditingPrompt(null)
     }
   }
 
-  const handleApplyRecalculatedTokens = () => {
-    const newTokens = calculatedTokens > 0 ? calculatedTokens : null;
-    if (newTokens !== editedTokens) {
-        setEditedTokens(newTokens);
+  const handleApplyRecalculatedInputTokens = () => {
+    const newTokens = recalculatedInputTokens > 0 ? recalculatedInputTokens : null;
+    if (newTokens !== editedInputTokens) {
+        setEditedInputTokens(newTokens);
     }
-    setOutputText('');
+    setInputTextForRecalc('');
+  };
+  
+  const handleApplyRecalculatedOutputTokens = () => {
+    const newTokens = recalculatedOutputTokens > 0 ? recalculatedOutputTokens : null;
+    if (newTokens !== editedOutputTokens) {
+        setEditedOutputTokens(newTokens);
+    }
+    setOutputTextForRecalc('');
   };
   
   const isSaveDisabled = useMemo(() => {
       if (!editingPrompt) return true;
+      if (!editedNote) return true; // Notes are now mandatory
       if (editingPrompt.is_local_only) return false;
       if (noteCharacterLimit && editedNote.length > noteCharacterLimit) return true;
       return false;
@@ -190,14 +227,21 @@ export function PromptList({
           <TableHeader>
             <TableRow>
               <TableHead className="md:whitespace-nowrap">Model</TableHead>
-              <TableHead>Note</TableHead>
-              <TableHead className="whitespace-nowrap text-center">Output Tokens</TableHead>
+              <TableHead>Note / Tags</TableHead>
+              <TableHead className="whitespace-nowrap text-center">Tokens (In/Out)</TableHead>
+              <TableHead className="whitespace-nowrap text-center">Cost</TableHead>
               <TableHead className="md:whitespace-nowrap">Timestamp</TableHead>
               <TableHead className="w-[50px] text-right"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paginatedHistory.map(prompt => (
+            {paginatedHistory.map(prompt => {
+              const costs = modelCostMap.get(prompt.model);
+              const cost = costs && (costs.inputCost > 0 || costs.outputCost > 0)
+                ? ((prompt.input_tokens || 0) / 1_000_000 * costs.inputCost) + ((prompt.output_tokens || 0) / 1_000_000 * costs.outputCost)
+                : 0;
+
+              return (
               <TableRow key={prompt.id}>
                 <TableCell className="font-medium md:whitespace-nowrap">
                   <div className="flex items-center gap-2">
@@ -226,7 +270,7 @@ export function PromptList({
                       </DialogTrigger>
                       <DialogContent className="sm:max-w-xl">
                         <DialogHeader>
-                          <DialogTitle>Full Prompt Note</DialogTitle>
+                          <DialogTitle>Full Note</DialogTitle>
                         </DialogHeader>
                         <div className="my-4 max-h-[60vh] overflow-y-auto whitespace-pre-wrap break-words rounded-md border bg-muted/50 p-4 text-sm">
                           {prompt.note}
@@ -243,7 +287,12 @@ export function PromptList({
                   )}
                 </TableCell>
                 <TableCell className="whitespace-nowrap text-center font-mono text-sm">
+                  {(prompt.input_tokens?.toLocaleString() ?? 'N/A')}
+                  <span className="text-muted-foreground mx-1">/</span> 
                   {prompt.output_tokens?.toLocaleString() ?? 'N/A'}
+                </TableCell>
+                <TableCell className="whitespace-nowrap text-center font-mono text-sm">
+                    {formatCost(cost)}
                 </TableCell>
                 <TableCell className="md:whitespace-nowrap">
                   {new Date(prompt.timestamp).toLocaleString()}
@@ -272,16 +321,18 @@ export function PromptList({
                       </DropdownMenuContent>
                     </DropdownMenu>
                     {editingPrompt && editingPrompt.id === prompt.id && (
-                       <DialogContent>
+                       <DialogContent className="sm:max-w-lg">
                         <DialogHeader>
-                          <DialogTitle>Edit Prompt</DialogTitle>
+                          <DialogTitle>Edit Prompt Log</DialogTitle>
                         </DialogHeader>
                         <div className="my-4 grid gap-4">
                           <div className="grid gap-2">
+                            <Label htmlFor="edit-note">Note / Tags</Label>
                             <Textarea
+                              id="edit-note"
                               value={editedNote}
                               onChange={e => setEditedNote(e.target.value)}
-                              rows={7}
+                              rows={4}
                               maxLength={editingPrompt.is_local_only ? undefined : noteCharacterLimit ?? undefined}
                               placeholder="Enter prompt notes or tags..."
                             />
@@ -293,39 +344,79 @@ export function PromptList({
                               {noteCharacterLimit && !editingPrompt.is_local_only ? ` / ${noteCharacterLimit.toLocaleString()}` : ' characters'}
                             </div>
                           </div>
-                          <Collapsible open={isOutputOpen} onOpenChange={setIsOutputOpen} className="grid gap-2">
+                          <Collapsible open={isInputOpen} onOpenChange={setIsInputOpen} className="grid gap-2">
                             <div className="flex items-center justify-between -mb-2">
                                 <CollapsibleTrigger asChild>
                                     <Button variant="ghost" size="sm" className="text-sm px-2 -ml-2">
                                         <ChevronsUpDown className="h-4 w-4 mr-2" />
-                                        Edit LLM Output Tokens
+                                        Recalculate Input Tokens
                                     </Button>
                                 </CollapsibleTrigger>
                                 <div className="flex items-center gap-2">
                                   <span className="text-sm font-mono text-muted-foreground">
-                                      {editedTokens?.toLocaleString() ?? 'N/A'}
+                                      {editedInputTokens?.toLocaleString() ?? 'N/A'}
                                   </span>
-                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditedTokens(null)}>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditedInputTokens(null)}>
                                     <Trash2 className="h-4 w-4 text-destructive/70" />
                                   </Button>
                                 </div>
                             </div>
                             <CollapsibleContent className="space-y-2 pt-2">
                                 <Textarea 
-                                    placeholder="Paste new model output here to recalculate tokens..."
-                                    value={outputText}
-                                    onChange={(e) => setOutputText(e.target.value)}
+                                    placeholder="Paste original prompt here to recalculate tokens..."
+                                    value={inputTextForRecalc}
+                                    onChange={(e) => setInputTextForRecalc(e.target.value)}
                                     rows={5}
                                 />
                                 <div className="flex justify-center items-center gap-4 text-xs text-muted-foreground">
-                                    <p>Recalculated tokens: ~{calculatedTokens.toLocaleString()}</p>
-                                    {outputText && (
+                                    <p>Recalculated tokens: ~{recalculatedInputTokens.toLocaleString()}</p>
+                                    {inputTextForRecalc && (
                                         <Button
                                             type="button"
                                             variant="link"
                                             size="sm"
                                             className="h-auto p-0 text-xs"
-                                            onClick={handleApplyRecalculatedTokens}
+                                            onClick={handleApplyRecalculatedInputTokens}
+                                        >
+                                            Apply
+                                        </Button>
+                                    )}
+                                </div>
+                            </CollapsibleContent>
+                          </Collapsible>
+                          <Collapsible open={isOutputOpen} onOpenChange={setIsOutputOpen} className="grid gap-2">
+                            <div className="flex items-center justify-between -mb-2">
+                                <CollapsibleTrigger asChild>
+                                    <Button variant="ghost" size="sm" className="text-sm px-2 -ml-2">
+                                        <ChevronsUpDown className="h-4 w-4 mr-2" />
+                                        Recalculate Output Tokens
+                                    </Button>
+                                </CollapsibleTrigger>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-mono text-muted-foreground">
+                                      {editedOutputTokens?.toLocaleString() ?? 'N/A'}
+                                  </span>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditedOutputTokens(null)}>
+                                    <Trash2 className="h-4 w-4 text-destructive/70" />
+                                  </Button>
+                                </div>
+                            </div>
+                            <CollapsibleContent className="space-y-2 pt-2">
+                                <Textarea 
+                                    placeholder="Paste model output here to recalculate tokens..."
+                                    value={outputTextForRecalc}
+                                    onChange={(e) => setOutputTextForRecalc(e.target.value)}
+                                    rows={5}
+                                />
+                                <div className="flex justify-center items-center gap-4 text-xs text-muted-foreground">
+                                    <p>Recalculated tokens: ~{recalculatedOutputTokens.toLocaleString()}</p>
+                                    {outputTextForRecalc && (
+                                        <Button
+                                            type="button"
+                                            variant="link"
+                                            size="sm"
+                                            className="h-auto p-0 text-xs"
+                                            onClick={handleApplyRecalculatedOutputTokens}
                                         >
                                             Apply
                                         </Button>
@@ -347,7 +438,8 @@ export function PromptList({
                   </Dialog>
                 </TableCell>
               </TableRow>
-            ))}
+              )
+            })}
           </TableBody>
         </Table>
       </div>

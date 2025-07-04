@@ -75,7 +75,7 @@ export default function Home() {
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="w-full sm:w-[180px] justify-between font-normal">
                   <span className="truncate">
-                    {filterModel === 'all' ? 'All Models' : data.models.find(m => m === filterModel) || 'All Models'}
+                    {filterModel === 'all' ? 'All Models' : data.models.find(m => m.name === filterModel)?.name || 'All Models'}
                   </span>
                   <ChevronDown className="h-4 w-4 opacity-50" />
                 </Button>
@@ -84,8 +84,8 @@ export default function Home() {
                 <DropdownMenuRadioGroup value={filterModel} onValueChange={setFilterModel}>
                   <DropdownMenuRadioItem value="all">All Models</DropdownMenuRadioItem>
                   {data.models.map(model => (
-                    <DropdownMenuRadioItem key={model} value={model}>
-                      {model}
+                    <DropdownMenuRadioItem key={model.name} value={model.name}>
+                      {model.name}
                     </DropdownMenuRadioItem>
                   ))}
                 </DropdownMenuRadioGroup>
@@ -105,7 +105,7 @@ export default function Home() {
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 type="search"
-                placeholder="Search in notes & models..."
+                placeholder="Search in prompts & models..."
                 className="w-full rounded-lg bg-background pl-8 sm:w-[200px] lg:w-[250px]"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}

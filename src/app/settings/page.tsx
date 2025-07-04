@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useData } from '@/hooks/use-data'
 import { useToast } from '@/hooks/use-toast'
 import { MainLayout } from '@/components/MainLayout'
@@ -33,12 +33,13 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import QRCode from 'qrcode'
 import { Html5Qrcode } from 'html5-qrcode'
-import { Loader2, AlertTriangle, ShieldCheck, ShieldOff, Info } from 'lucide-react'
+import { Loader2, AlertTriangle, ShieldCheck, ShieldOff, Info, Trash2, Save, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Prompt } from '@/lib/types'
+import { Prompt, Model } from '@/lib/types'
 import { LOCAL_HISTORY_STORAGE } from '@/lib/constants'
+import { Label } from '@/components/ui/label'
 
 const MODEL_NAME_MAX_LENGTH = 80;
 const MODEL_LIMIT = 10;
@@ -47,7 +48,9 @@ export default function SettingsPage() {
   const data = useData()
   const { toast } = useToast()
 
-  const [newModel, setNewModel] = useState('')
+  const [editableModels, setEditableModels] = useState<Model[]>([]);
+  const [newModelName, setNewModelName] = useState('');
+
   const [manualSyncKey, setManualSyncKey] = useState('')
   const [masterPassword, setMasterPassword] = useState('')
   const [isLinkDeviceDialogOpen, setLinkDeviceDialogOpen] = useState(false)
@@ -60,8 +63,14 @@ export default function SettingsPage() {
   const [isResolverOpen, setResolverOpen] = useState(false);
   const [conflicts, setConflicts] = useState<Prompt[]>([]);
   const [passwordForMigration, setPasswordForMigration] = useState('');
+  
+  useEffect(() => {
+    // Deep copy to avoid direct state mutation when user edits
+    setEditableModels(JSON.parse(JSON.stringify(data.models)));
+  }, [data.models]);
 
-  const isModelLimitReached = data.models.length >= MODEL_LIMIT;
+  const isModelLimitReached = editableModels.length >= MODEL_LIMIT;
+  const haveModelsChanged = useMemo(() => JSON.stringify(data.models) !== JSON.stringify(editableModels), [data.models, editableModels]);
 
   const formatBytes = (bytes: number, decimals = 2) => {
     if (!+bytes) return '0 Bytes'
@@ -87,15 +96,52 @@ export default function SettingsPage() {
   const formattedSize = formatBytes(estimatedStorage);
 
   const handleAddModel = () => {
-    if (newModel && !data.models.includes(newModel) && !isModelLimitReached) {
-      data.updateUserModels([...data.models, newModel])
-      setNewModel('')
+    if (newModelName && !editableModels.some(m => m.name === newModelName) && !isModelLimitReached) {
+      const newModel: Model = { name: newModelName, inputCost: 0, outputCost: 0 };
+      setEditableModels([...editableModels, newModel]);
+      setNewModelName('');
     }
+  };
+
+  const handleUpdateModel = (index: number, field: keyof Model, value: string | number) => {
+    const updatedModels = [...editableModels];
+    const modelToUpdate = { ...updatedModels[index] }; // Create a shallow copy of the object
+
+    if (field === 'name' && typeof value === 'string') {
+        modelToUpdate.name = value;
+    } else if ((field === 'inputCost' || field === 'outputCost') && typeof value === 'number') {
+        modelToUpdate[field] = value >= 0 ? value : 0;
+    }
+    updatedModels[index] = modelToUpdate;
+    setEditableModels(updatedModels);
+  };
+
+  const handleRemoveModel = (index: number) => {
+    const updatedModels = [...editableModels];
+    updatedModels.splice(index, 1);
+    setEditableModels(updatedModels);
+  };
+  
+  const handleDiscardChanges = () => {
+    setEditableModels(JSON.parse(JSON.stringify(data.models)));
+    toast({
+        title: "Changes Discarded",
+        description: "Your model configurations have been reset.",
+        variant: "default",
+    });
   }
 
-  const handleRemoveModel = (modelToRemove: string) => {
-    data.updateUserModels(data.models.filter(m => m !== modelToRemove))
-  }
+  const handleSaveChanges = async () => {
+    try {
+        await data.updateUserModels(editableModels);
+        toast({
+            title: "Success",
+            description: "Your model configurations have been saved.",
+        });
+    } catch (e: any) {
+        toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
+  };
 
   const handleDeleteAllData = async () => {
     try {
@@ -315,49 +361,90 @@ export default function SettingsPage() {
         <div className="grid gap-6">
           <Card>
             <CardHeader>
-              <CardTitle>Manage Models</CardTitle>
-              <CardDescription>Add or remove the LLM models you use.</CardDescription>
+              <CardTitle>Manage Models & Costs</CardTitle>
+              <CardDescription>Add, remove, and define costs for the LLM models you use.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex items-start space-x-2">
-                <div className="flex-grow space-y-1">
-                  <Input
-                    value={newModel}
-                    onChange={e => setNewModel(e.target.value)}
-                    placeholder={isModelLimitReached ? "Model limit reached" : "New model name"}
-                    maxLength={MODEL_NAME_MAX_LENGTH}
-                    disabled={isModelLimitReached}
-                  />
-                  {isModelLimitReached ? (
-                    <p className="text-xs text-red-500 px-1">You have reached the maximum of {MODEL_LIMIT} models.</p>
-                  ) : (
-                    <div className={cn("text-right text-xs pr-1", newModel.length >= MODEL_NAME_MAX_LENGTH ? "text-red-500" : "text-muted-foreground")}>
-                      {newModel.length} / {MODEL_NAME_MAX_LENGTH}
+              <div className="space-y-4">
+                {editableModels.map((model, index) => (
+                  <div key={index} className="p-4 border rounded-lg space-y-4">
+                    <div className="flex justify-between items-start">
+                      <Input
+                        value={model.name}
+                        onChange={e => handleUpdateModel(index, 'name', e.target.value)}
+                        placeholder="Model name"
+                        maxLength={MODEL_NAME_MAX_LENGTH}
+                        className="text-base font-semibold !mt-0"
+                      />
+                      <Button variant="ghost" size="icon" className="shrink-0" onClick={() => handleRemoveModel(index)}>
+                        <Trash2 className="h-4 w-4 text-muted-foreground" />
+                      </Button>
                     </div>
-                  )}
-                </div>
-                <Button onClick={handleAddModel} disabled={isModelLimitReached || !newModel}>Add</Button>
-              </div>
-              <ul className="mt-4 space-y-1">
-                {data.models.map(model => (
-                  <li key={model} className="flex justify-between items-center text-sm p-2 rounded-md hover:bg-accent">
-                    <span className="break-all pr-2">{model}</span>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild><Button variant="outline" size="sm">Remove</Button></AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                          <AlertDialogDescription>This action will remove the model "{model}" from your list. It will not delete past prompts logged with this model.</AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction className={buttonVariants({ variant: "destructive" })} onClick={() => handleRemoveModel(model)}>Remove</AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </li>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor={`input-cost-${index}`}>Input Cost / 1M tokens ($)</Label>
+                        <Input
+                          id={`input-cost-${index}`}
+                          type="number"
+                          step="0.0001"
+                          min="0"
+                          value={model.inputCost}
+                          onChange={e => handleUpdateModel(index, 'inputCost', parseFloat(e.target.value))}
+                          placeholder="e.g., 0.50"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor={`output-cost-${index}`}>Output Cost / 1M tokens ($)</Label>
+                        <Input
+                          id={`output-cost-${index}`}
+                          type="number"
+                          step="0.0001"
+                          min="0"
+                          value={model.outputCost}
+                          onChange={e => handleUpdateModel(index, 'outputCost', parseFloat(e.target.value))}
+                          placeholder="e.g., 1.50"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 ))}
-              </ul>
+              </div>
+
+              <Separator className="my-6" />
+
+              <div className="flex items-start space-x-2">
+                  <div className="flex-grow space-y-1">
+                      <Input
+                          value={newModelName}
+                          onChange={e => setNewModelName(e.target.value)}
+                          placeholder={isModelLimitReached ? "Model limit reached" : "New model name"}
+                          maxLength={MODEL_NAME_MAX_LENGTH}
+                          disabled={isModelLimitReached}
+                          onKeyDown={(e) => e.key === 'Enter' && handleAddModel()}
+                      />
+                      {isModelLimitReached ? (
+                          <p className="text-xs text-red-500 px-1">You have reached the maximum of {MODEL_LIMIT} models.</p>
+                      ) : (
+                          <div className={cn("text-right text-xs pr-1", newModelName.length >= MODEL_NAME_MAX_LENGTH ? "text-red-500" : "text-muted-foreground")}>
+                              {newModelName.length} / {MODEL_NAME_MAX_LENGTH}
+                          </div>
+                      )}
+                  </div>
+                  <Button onClick={handleAddModel} disabled={isModelLimitReached || !newModelName}>Add Model</Button>
+              </div>
+
+              {haveModelsChanged && (
+                <div className="mt-6 p-4 bg-secondary/50 border rounded-lg flex justify-end gap-2">
+                    <Button onClick={handleDiscardChanges} variant="outline">
+                        <RotateCcw className="mr-2 h-4 w-4" />
+                        Discard Changes
+                    </Button>
+                    <Button onClick={handleSaveChanges}>
+                        <Save className="mr-2 h-4 w-4" />
+                        Save Changes
+                    </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
 
