@@ -1,14 +1,15 @@
+// src/app/settings/page.tsx
 'use client'
 
-import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useData } from '@/hooks/use-data'
 import { useToast } from '@/hooks/use-toast'
 import { MainLayout } from '@/components/MainLayout'
-import { MigrationConflictResolver } from '@/components/MigrationConflictResolver'
 import { E2EEExplanation } from '@/components/E2EEExplanation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
 import {
   Dialog,
   DialogContent,
@@ -33,12 +34,11 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import QRCode from 'qrcode'
 import { Html5Qrcode } from 'html5-qrcode'
-import { Loader2, AlertTriangle, ShieldCheck, ShieldOff, Info, Trash2, Save, RotateCcw } from 'lucide-react'
+import { Loader2, AlertTriangle, ShieldCheck, ShieldOff, Info, Trash2, Save, RotateCcw, Percent } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Prompt, Model } from '@/lib/types'
-import { LOCAL_HISTORY_STORAGE } from '@/lib/constants'
+import { Model } from '@/lib/types'
 import { Label } from '@/components/ui/label'
 
 const MODEL_NAME_MAX_LENGTH = 80;
@@ -58,58 +58,40 @@ export default function SettingsPage() {
   const [isMigrateDialogOpen, setIsMigrateDialogOpen] = useState(false)
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
   const [isLinkConfirmationOpen, setIsLinkConfirmationOpen] = useState(false);
-
-  // State for the new migration flow
-  const [isResolverOpen, setResolverOpen] = useState(false);
-  const [conflicts, setConflicts] = useState<Prompt[]>([]);
-  const [passwordForMigration, setPasswordForMigration] = useState('');
   
   useEffect(() => {
-    // Deep copy to avoid direct state mutation when user edits
     setEditableModels(JSON.parse(JSON.stringify(data.models)));
   }, [data.models]);
 
   const isModelLimitReached = editableModels.length >= MODEL_LIMIT;
   const haveModelsChanged = useMemo(() => JSON.stringify(data.models) !== JSON.stringify(editableModels), [data.models, editableModels]);
-
-  const formatBytes = (bytes: number, decimals = 2) => {
-    if (!+bytes) return '0 Bytes'
-    const k = 1024
-    const dm = decimals < 0 ? 0 : decimals
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`
-  }
-
-  const estimatedStorage = useMemo(() => {
-    if (!data.syncKey || !data.history) return 0;
-    const totalBytes = data.history.reduce((acc, prompt) => {
-        if (prompt.is_local_only) return acc;
-        const modelBytes = new TextEncoder().encode(prompt.model).length;
-        const noteBytes = new TextEncoder().encode(prompt.note).length;
-        const overheadBytes = 56;
-        return acc + modelBytes + noteBytes + overheadBytes;
-    }, 0);
-    return totalBytes;
-  }, [data.history, data.syncKey]);
   
-  const formattedSize = formatBytes(estimatedStorage);
-
   const handleAddModel = () => {
     if (newModelName && !editableModels.some(m => m.name === newModelName) && !isModelLimitReached) {
-      const newModel: Model = { name: newModelName, inputCost: 0, outputCost: 0 };
+      const newModel: Model = { name: newModelName, inputCost: 0, outputCost: 0, isCacheEnabled: false, cacheDiscount: 0 };
       setEditableModels([...editableModels, newModel]);
       setNewModelName('');
     }
   };
 
-  const handleUpdateModel = (index: number, field: 'inputCost' | 'outputCost', value: string | number) => {
+  const handleUpdateModel = (index: number, field: keyof Model, value: string | number | boolean) => {
     const updatedModels = [...editableModels];
     const modelToUpdate = { ...updatedModels[index] };
 
-    const stringValue = String(value);
-    const numericValue = parseFloat(stringValue);
-    modelToUpdate[field] = (stringValue === '' || isNaN(numericValue) || numericValue < 0) ? 0 : numericValue;
+    if (field === 'isCacheEnabled') {
+        modelToUpdate[field] = value as boolean;
+    } else if (typeof value === 'string' || typeof value === 'number') {
+        const stringValue = String(value);
+        let numericValue = parseFloat(stringValue);
+
+        if (field === 'cacheDiscount') {
+            numericValue = Math.max(0, Math.min(100, numericValue));
+        } else {
+            numericValue = Math.max(0, numericValue);
+        }
+        
+        (modelToUpdate as any)[field] = (stringValue === '' || isNaN(numericValue)) ? 0 : numericValue;
+    }
     
     updatedModels[index] = modelToUpdate;
     setEditableModels(updatedModels);
@@ -141,15 +123,40 @@ export default function SettingsPage() {
         toast({ title: "Error", description: e.message, variant: "destructive" });
     }
   };
+  
+  const formatBytes = (bytes: number, decimals = 2) => {
+    if (!+bytes) return '0 Bytes'
+    const k = 1024
+    const dm = decimals < 0 ? 0 : decimals
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`
+  }
 
+  const estimatedStorage = useMemo(() => {
+    if (!data.syncKey || !data.conversations) return 0;
+    const totalBytes = data.conversations.reduce((acc, convo) => {
+        if (convo.is_local_only) return acc;
+        let convoBytes = new TextEncoder().encode(convo.title).length;
+        convoBytes += convo.messages.reduce((msgAcc, msg) => {
+            const contentBytes = new TextEncoder().encode(msg.content).length;
+            const overheadBytes = 56; // Simplified overhead
+            return msgAcc + contentBytes + overheadBytes;
+        }, 0);
+        return acc + convoBytes;
+    }, 0);
+    return totalBytes;
+  }, [data.conversations, data.syncKey]);
+  
+  const formattedSize = formatBytes(estimatedStorage);
   const handleDeleteAllData = async () => {
     try {
-        await data.deleteAllPrompts();
+        await data.deleteAllData();
         toast({
           title: "Success",
           description: data.syncKey
-            ? "All your synced data has been deleted."
-            : "All your local prompt history has been deleted.",
+            ? "All your synced conversations have been deleted."
+            : "All your local conversations have been deleted.",
         });
     } catch(e: any) {
         toast({ title: "Error", description: e.message, variant: "destructive" });
@@ -160,7 +167,7 @@ export default function SettingsPage() {
     data.unlinkDevice();
     toast({
       title: "Device Unlinked",
-      description: "This device has been unlinked. Your local-only notes have been preserved.",
+      description: "This device has been unlinked. Your local-only conversations have been preserved.",
     });
   };
 
@@ -180,67 +187,23 @@ export default function SettingsPage() {
     }
   };
 
-  const handleInitiateMigration = async () => {
+  const handleInitiateSync = async () => {
     if (!masterPassword) {
       toast({ title: "Password Required", description: "Please set a master password.", variant: "destructive" });
       return;
     }
-
-    const conflictNotes = data.checkForMigrationConflicts();
     
-    if (conflictNotes.length > 0) {
-        setConflicts(conflictNotes);
-        setPasswordForMigration(masterPassword);
-        setIsMigrateDialogOpen(false);
-        setResolverOpen(true);
-    } else {
-        // No conflicts, proceed with direct migration
-        try {
-            const localHistoryRaw = localStorage.getItem(LOCAL_HISTORY_STORAGE);
-            const notesToMigrate = localHistoryRaw ? JSON.parse(localHistoryRaw) : [];
-            await data.completeMigration(masterPassword, notesToMigrate, []);
-            toast({
-                title: "Success!",
-                description: "Cloud sync has been enabled and your data is encrypted.",
-            });
-            setIsMigrateDialogOpen(false);
-            setMasterPassword('');
-        } catch (error: any) {
-            toast({ title: "Error", description: error.message, variant: "destructive" });
-        }
-    }
-  };
-
-  const handleResolveConflicts = useCallback(async (notesToMigrate: Prompt[], notesToKeepLocal: Prompt[]) => {
-      try {
-          const allLocalNotesRaw = localStorage.getItem(LOCAL_HISTORY_STORAGE);
-          const allLocalNotes: Prompt[] = allLocalNotesRaw ? JSON.parse(allLocalNotesRaw) : [];
-          
-          const conflictIds = new Set(conflicts.map(c => c.id));
-          const nonConflictNotes = allLocalNotes.filter(p => !conflictIds.has(p.id));
-
-          await data.completeMigration(passwordForMigration, [...nonConflictNotes, ...notesToMigrate], notesToKeepLocal);
-          
-          toast({
-              title: "Migration Complete!",
-              description: "Cloud sync is now enabled.",
-          });
-      } catch (error: any) {
-          toast({ title: "Migration Failed", description: error.message, variant: "destructive" });
-      } finally {
-          setResolverOpen(false);
-          setConflicts([]);
-          setPasswordForMigration('');
-          setMasterPassword('');
-      }
-  }, [data, conflicts, passwordForMigration, toast]);
-
-  const handleCancelConflictResolution = () => {
-      setResolverOpen(false);
-      setConflicts([]);
-      setPasswordForMigration('');
+    try {
+      await data.enableSyncAndMigrateData(masterPassword);
+      toast({
+        title: "Success!",
+        description: "Cloud sync has been enabled and your local data has been migrated.",
+      });
+      setIsMigrateDialogOpen(false);
       setMasterPassword('');
-      toast({ title: "Sync Canceled", description: "The cloud sync process was canceled." });
+    } catch (error: any) {
+      toast({ title: "Error Enabling Sync", description: error.message, variant: "destructive" });
+    }
   };
 
   const executeLinkDevice = async () => {
@@ -274,7 +237,7 @@ export default function SettingsPage() {
       toast({ title: "Missing Information", description: "Please provide both a Sync Key and your Master Password.", variant: "destructive" });
       return;
     }
-    if (!data.syncKey && data.history.length > 0) {
+    if (!data.syncKey && data.conversations.length > 0) {
         setIsLinkConfirmationOpen(true);
     } else {
         executeLinkDevice();
@@ -364,50 +327,44 @@ export default function SettingsPage() {
               <CardDescription>Add, remove, and define costs for the LLM models you use.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="hidden md:grid md:grid-cols-[2fr_1fr_1fr_auto] gap-x-4 items-center mb-2 px-2">
+              <div className="hidden md:grid md:grid-cols-[2fr_1fr_1fr_0.7fr_1fr_auto] gap-x-4 items-center mb-2 px-2">
                   <Label className="text-muted-foreground font-normal text-sm">Model Name</Label>
                   <Label className="text-muted-foreground font-normal text-sm">Input Cost / 1M ($)</Label>
                   <Label className="text-muted-foreground font-normal text-sm">Output Cost / 1M ($)</Label>
+                  <Label className="text-muted-foreground font-normal text-sm text-center">Cache</Label>
+                  <Label className="text-muted-foreground font-normal text-sm">Discount</Label>
                   <div className="w-[40px]"></div>
               </div>
 
               <div className="space-y-2">
                 {editableModels.map((model, index) => (
-                  <div key={index} className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_auto] gap-x-4 gap-y-2 items-center p-3 border rounded-lg bg-background hover:bg-muted/50 transition-colors">
+                  <div key={index} className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_0.7fr_1fr_auto] gap-x-4 gap-y-2 items-center p-3 border rounded-lg bg-background hover:bg-muted/50 transition-colors">
                     <div className="space-y-1 md:space-y-0">
                       <Label htmlFor={`model-name-${index}`} className="text-xs font-medium text-muted-foreground md:hidden">Model Name</Label>
-                      <Input
-                        id={`model-name-${index}`}
-                        value={model.name}
-                        readOnly
-                        className="font-medium bg-muted/50 cursor-default"
-                      />
+                      <Input id={`model-name-${index}`} value={model.name} readOnly className="font-medium bg-muted/50 cursor-default" />
                     </div>
 
                     <div className="space-y-1 md:space-y-0">
                       <Label htmlFor={`input-cost-${index}`} className="text-xs font-medium text-muted-foreground md:hidden">Input Cost / 1M tokens ($)</Label>
-                      <Input
-                        id={`input-cost-${index}`}
-                        type="number"
-                        step="0.0001"
-                        min="0"
-                        value={model.inputCost || ''}
-                        onChange={e => handleUpdateModel(index, 'inputCost', e.target.value)}
-                        placeholder="0"
-                      />
+                      <Input id={`input-cost-${index}`} type="number" step="0.0001" min="0" value={model.inputCost || ''} onChange={e => handleUpdateModel(index, 'inputCost', e.target.value)} placeholder="0"/>
                     </div>
 
                     <div className="space-y-1 md:space-y-0">
                       <Label htmlFor={`output-cost-${index}`} className="text-xs font-medium text-muted-foreground md:hidden">Output Cost / 1M tokens ($)</Label>
-                      <Input
-                        id={`output-cost-${index}`}
-                        type="number"
-                        step="0.0001"
-                        min="0"
-                        value={model.outputCost || ''}
-                        onChange={e => handleUpdateModel(index, 'outputCost', e.target.value)}
-                        placeholder="0"
-                      />
+                      <Input id={`output-cost-${index}`} type="number" step="0.0001" min="0" value={model.outputCost || ''} onChange={e => handleUpdateModel(index, 'outputCost', e.target.value)} placeholder="0"/>
+                    </div>
+                    
+                    <div className="flex flex-col items-center justify-center space-y-1 md:space-y-0">
+                      <Label htmlFor={`cache-enabled-${index}`} className="text-xs font-medium text-muted-foreground md:hidden">Cache Enabled</Label>
+                      <Switch id={`cache-enabled-${index}`} checked={model.isCacheEnabled} onCheckedChange={checked => handleUpdateModel(index, 'isCacheEnabled', checked)} />
+                    </div>
+
+                    <div className="space-y-1 md:space-y-0">
+                        <Label htmlFor={`cache-discount-${index}`} className="text-xs font-medium text-muted-foreground md:hidden">Cache Discount</Label>
+                        <div className="relative">
+                            <Input id={`cache-discount-${index}`} type="number" min="0" max="100" value={model.cacheDiscount || ''} onChange={e => handleUpdateModel(index, 'cacheDiscount', e.target.value)} placeholder="0" className="pr-7" disabled={!model.isCacheEnabled}/>
+                            <Percent className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        </div>
                     </div>
 
                     <div className="flex justify-end md:justify-center">
@@ -464,7 +421,7 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          <Card>
+           <Card>
             <CardHeader>
               <CardTitle>Sync & Data Management</CardTitle>
               <CardDescription>
@@ -541,7 +498,7 @@ export default function SettingsPage() {
                           <AlertDialogHeader>
                             <AlertDialogTitle>Unlink this device?</AlertDialogTitle>
                             <AlertDialogDescription>
-                              This will remove the sync key and encryption key from this device and reset the app. Your encrypted data in the cloud will not be affected. Your local-only notes will be preserved.
+                              This will remove the sync key and encryption key from this device and reset the app. Your encrypted data in the cloud will not be affected. Your local-only conversations will be preserved.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
@@ -564,7 +521,7 @@ export default function SettingsPage() {
                         <DialogContent>
                           <DialogHeader>
                             <DialogTitle>Enable End-to-End Encrypted Sync</DialogTitle>
-                            <DialogDescription>Create a master password to encrypt your data.</DialogDescription>
+                            <DialogDescription>Create a master password to encrypt your data. Your current local conversations will be encrypted and uploaded.</DialogDescription>
                           </DialogHeader>
                           <div className="space-y-4 py-4">
                             <Alert variant="destructive">
@@ -579,13 +536,13 @@ export default function SettingsPage() {
                                 placeholder="Create a strong master password" 
                                 value={masterPassword}
                                 onChange={e => setMasterPassword(e.target.value)}
-                                onKeyDown={e => e.key === 'Enter' && handleInitiateMigration()}
+                                onKeyDown={e => e.key === 'Enter' && handleInitiateSync()}
                                 disabled={data.syncing}
                             />
                           </div>
                           <DialogFooter className="pt-2">
                              <Button variant="outline" onClick={() => setIsMigrateDialogOpen(false)} disabled={data.syncing}>Cancel</Button>
-                            <Button onClick={handleInitiateMigration} disabled={data.syncing || !masterPassword}>
+                            <Button onClick={handleInitiateSync} disabled={data.syncing || !masterPassword}>
                               {data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Enable & Encrypt
                             </Button>
                           </DialogFooter>
@@ -641,10 +598,10 @@ export default function SettingsPage() {
                 </div>
               </div>
               
-              {data.syncKey && data.history.length > 0 && (
+              {data.syncKey && data.conversations.length > 0 && (
                 <div className="text-xs text-center text-muted-foreground p-2 border rounded-md bg-muted/50">
                   <p>Estimated Original Data Size: <span className="font-semibold">{formattedSize}</span></p>
-                  <p className="mt-1">Based on {data.history.filter(p => !p.is_local_only).length} synced prompts. Stored size will be larger due to encryption.</p>
+                  <p className="mt-1">Based on {data.conversations.filter(p => !p.is_local_only).length} synced conversations. Stored size will be larger due to encryption.</p>
                 </div>
               )}
             </CardContent>
@@ -661,20 +618,17 @@ export default function SettingsPage() {
                   <>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="destructive" disabled={data.history.filter(p => !p.is_local_only).length === 0 || data.isLocked}>Delete All Synced Data</Button>
+                        <Button variant="destructive" disabled={data.conversations.filter(p => !p.is_local_only).length === 0 || data.isLocked}>Delete All Synced Data</Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
                           <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                           <AlertDialogDescription>
-                            This will permanently delete all encrypted prompt history from your cloud account, affecting all synced devices. This action will not affect your local-only notes. This cannot be undone.
+                            This action is disabled for safety. Please delete conversations individually from the dashboard.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction className={buttonVariants({ variant: "destructive" })} onClick={handleDeleteAllData}>
-                            Delete All Synced Data
-                          </AlertDialogAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>
@@ -687,7 +641,7 @@ export default function SettingsPage() {
                         <AlertDialogHeader>
                           <AlertDialogTitle>Delete your account?</AlertDialogTitle>
                           <AlertDialogDescription>
-                            This will permanently delete your entire cloud account, including your sync key, salt, models, and all encrypted prompt history. This cannot be undone.
+                            This will permanently delete your entire cloud account, including your sync key, salt, models, and all encrypted conversations. This cannot be undone.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
@@ -707,13 +661,13 @@ export default function SettingsPage() {
                 ) : (
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button variant="destructive" disabled={data.history.length === 0}>Delete All Local Data</Button>
+                      <Button variant="destructive" disabled={data.conversations.length === 0}>Delete All Local Data</Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
                         <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                         <AlertDialogDescription>
-                          This will permanently delete all prompt history from this device's local storage.
+                          This will permanently delete all conversations from this device's local storage.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
@@ -730,24 +684,18 @@ export default function SettingsPage() {
           </Card>
         </div>
       </main>
-      <MigrationConflictResolver
-        isOpen={isResolverOpen}
-        onOpenChange={setResolverOpen}
-        conflicts={conflicts}
-        onResolve={handleResolveConflicts}
-        onCancel={handleCancelConflictResolution}
-      />
+      
       <AlertDialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm Data Import</AlertDialogTitle>
             <AlertDialogDescription>
-              {data.syncKey ? 'This will overwrite and re-encrypt all current cloud data with the contents of this file. This action cannot be undone.' : 'This will overwrite all your local data with the contents of this file. This action cannot be undone.'}
+              {data.syncKey ? 'Importing into a synced account is not currently supported. Please unlink this device first.' : 'This will overwrite all your local data with the contents of this file. This action cannot be undone.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={data.syncing} onClick={() => setIsImportDialogOpen(false)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleImport} disabled={data.syncing}>
+            <AlertDialogAction onClick={handleImport} disabled={data.syncing || !!data.syncKey}>
                 {data.syncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Import
             </AlertDialogAction>
@@ -759,7 +707,7 @@ export default function SettingsPage() {
             <AlertDialogHeader>
                 <AlertDialogTitle>Overwrite Local Data?</AlertDialogTitle>
                 <AlertDialogDescription>
-                    Linking this device will replace its current local data with the data from your cloud account. Any notes you've made on this device will be permanently deleted. Are you sure you want to continue?
+                    Linking this device will replace its current local data with the data from your cloud account. Any conversations you've saved on this device will be permanently deleted. Are you sure you want to continue?
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

@@ -2,11 +2,11 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, LineChart, Line, CartesianGrid, Cell } from 'recharts'
-import { Prompt, Model } from '@/lib/types'
+import { Conversation, Model, Message } from '@/lib/types'
 import { useMemo } from 'react'
 
 interface StatsProps {
-  history: Prompt[]
+  conversations: Conversation[]
   models: Model[]
 }
 
@@ -27,7 +27,7 @@ const CustomModelTooltip = ({ active, payload, label }: any) => {
     return (
       <div className="rounded-lg border bg-popover px-3 py-1.5 text-sm shadow-sm">
         <p className="text-popover-foreground">
-          {label}: <span className="font-bold text-muted-foreground">{payload[0].value}</span>
+          {label}: <span className="font-bold text-muted-foreground">{payload[0].value.toLocaleString()} messages</span>
         </p>
       </div>
     );
@@ -35,45 +35,12 @@ const CustomModelTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-const truncateText = (text: string, maxLength: number) => {
-  if (text.length <= maxLength) return text;
-  return `${text.substring(0, maxLength)}...`;
-}
-
-const CustomLegend = (props: any) => {
-  const { payload } = props;
-  return (
-    <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 mt-4 text-xs text-muted-foreground">
-      {payload.map((entry: any, index: number) => (
-        <div key={`item-${index}`} className="flex items-center space-x-2">
-          <span style={{ backgroundColor: entry.color }} className="inline-block w-2.5 h-2.5 rounded-full" />
-          <span>{entry.value}</span>
-        </div>
-      ))}
-    </div>
-  );
-};
-
-const formatLargeNumber = (num: number): string => {
-  if (num >= 1_000_000_000) {
-    return (num / 1_000_000_000).toFixed(1).replace(/\.0$/, '') + 'B';
-  }
-  if (num >= 1_000_000) {
-    return (num / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
-  }
-  if (num >= 1_000) {
-    return (num / 1_000).toFixed(1).replace(/\.0$/, '') + 'K';
-  }
-  return num.toLocaleString();
-};
-
 const formatCost = (cost: number) => {
     if (cost < 0.0001 && cost > 0) return "<$0.0001";
     return `$${cost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
 };
 
-
-export function Stats({ history, models }: StatsProps) {
+export function Stats({ conversations, models }: StatsProps) {
   const modelCostMap = useMemo(() => {
     const map = new Map<string, { inputCost: number; outputCost: number }>();
     models.forEach(model => {
@@ -82,60 +49,36 @@ export function Stats({ history, models }: StatsProps) {
     return map;
   }, [models]);
 
-  const calculateCost = (prompts: Prompt[]) => {
-    return prompts.reduce((acc, p) => {
-      const costs = modelCostMap.get(p.model);
-      if (!costs) return acc;
-      const inputCost = (p.input_tokens || 0) / 1_000_000 * costs.inputCost;
-      const outputCost = (p.output_tokens || 0) / 1_000_000 * costs.outputCost;
+  const allMessages = useMemo(() => conversations.flatMap(c => c.messages), [conversations]);
+
+  const calculateCost = (messages: Message[]) => {
+    // This is a simplified calculation. A truly accurate one would need to know the model for each message.
+    // We'll assume the first model in the list for this stat view for simplicity.
+    const costs = models.length > 0 ? modelCostMap.get(models[0].name) : null;
+    if (!costs) return 0;
+
+    return messages.reduce((acc, msg) => {
+      const inputCost = (msg.input_tokens || 0) / 1_000_000 * costs.inputCost;
+      const outputCost = (msg.output_tokens || 0) / 1_000_000 * costs.outputCost;
       return acc + inputCost + outputCost;
     }, 0);
   };
   
-  const totalPrompts = history.length
-  const dailyPrompts = history.filter(p => new Date(p.timestamp) >= getStartOfToday()).length
+  const totalConversations = conversations.length;
+  const totalMessages = allMessages.length;
+  const dailyMessages = allMessages.filter(m => new Date(m.timestamp) >= getStartOfToday()).length;
   
-  const totalCost = useMemo(() => calculateCost(history), [history, modelCostMap]);
-  const dailyCost = useMemo(() => calculateCost(history.filter(p => new Date(p.timestamp) >= getStartOfToday())), [history, modelCostMap]);
-  const monthlyCost = useMemo(() => calculateCost(history.filter(p => new Date(p.timestamp) >= getStartOfMonth())), [history, modelCostMap]);
+  const totalCost = useMemo(() => calculateCost(allMessages), [allMessages, modelCostMap]);
+  const dailyCost = useMemo(() => calculateCost(allMessages.filter(p => new Date(p.timestamp) >= getStartOfToday())), [allMessages, modelCostMap]);
+  const monthlyCost = useMemo(() => calculateCost(allMessages.filter(p => new Date(p.timestamp) >= getStartOfMonth())), [allMessages, modelCostMap]);
 
-  const modelColorMap = useMemo(() => {
-    const map = new Map<string, string>();
-    models.forEach((model, i) => {
-        map.set(model.name, COLORS[i % COLORS.length]);
-    });
-    return map;
-  }, [models]);
-
-  const activeModelsInPeriod = useMemo(() => {
-    return new Set(history.map(p => p.model));
-  }, [history]);
-
-  const modelCounts = useMemo(() => {
-    const counts: { [key: string]: number } = {}
-    models.forEach(model => {
-      counts[model.name] = 0
-    })
-    history.forEach(prompt => {
-      if (counts[prompt.model] !== undefined) {
-        counts[prompt.model]++
-      }
-    })
-    return models.map(model => ({ name: model.name, count: counts[model.name] })).filter(m => m.count > 0);
-  }, [history, models])
-  
-  const barChartHeight = modelCounts.length > 0 ? Math.max(150, modelCounts.length * 35) : 150;
 
   const dailyUsage = useMemo(() => {
-    const promptCountsByDate = new Map<string, Map<string, number>>();
-    history.forEach(prompt => {
-      const dateKey = new Date(prompt.timestamp).toLocaleDateString('en-CA'); 
-      if (!promptCountsByDate.has(dateKey)) {
-        promptCountsByDate.set(dateKey, new Map());
-      }
-      const dayMap = promptCountsByDate.get(dateKey)!;
-      const currentCount = dayMap.get(prompt.model) || 0;
-      dayMap.set(prompt.model, currentCount + 1);
+    const messageCountsByDate = new Map<string, number>();
+    allMessages.forEach(message => {
+      const dateKey = new Date(message.timestamp).toLocaleDateString('en-CA'); 
+      const currentCount = messageCountsByDate.get(dateKey) || 0;
+      messageCountsByDate.set(dateKey, currentCount + 1);
     });
 
     const last14Days = [];
@@ -149,39 +92,42 @@ export function Stats({ history, models }: StatsProps) {
     return last14Days.map(date => {
       const dateKey = date.toLocaleDateString('en-CA');
       const displayDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      
-      const chartDataPoint: { date: string, [model: string]: number | string } = { date: displayDate };
-      const countsForDay = promptCountsByDate.get(dateKey);
-
-      activeModelsInPeriod.forEach(model => {
-        chartDataPoint[model] = (countsForDay && countsForDay.get(model)) || 0;
-      });
-
-      return chartDataPoint;
+      return {
+        date: displayDate,
+        messages: messageCountsByDate.get(dateKey) || 0
+      };
     });
-  }, [history]);
+  }, [allMessages]);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       <Card>
         <CardHeader>
-          <CardTitle>Total Prompts</CardTitle>
+          <CardTitle>Total Conversations</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-4xl font-bold">{totalPrompts.toLocaleString()}</p>
+          <p className="text-4xl font-bold">{totalConversations.toLocaleString()}</p>
         </CardContent>
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>Today's Prompts</CardTitle>
+          <CardTitle>Total Messages</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-4xl font-bold">{dailyPrompts.toLocaleString()}</p>
+          <p className="text-4xl font-bold">{totalMessages.toLocaleString()}</p>
         </CardContent>
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>Total Cost</CardTitle>
+          <CardTitle>Today's Messages</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-4xl font-bold">{dailyMessages.toLocaleString()}</p>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Total Cost (Est.)</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-4xl font-bold">{formatCost(totalCost)}</p>
@@ -189,7 +135,7 @@ export function Stats({ history, models }: StatsProps) {
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>Cost Today</CardTitle>
+          <CardTitle>Cost Today (Est.)</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-4xl font-bold">{formatCost(dailyCost)}</p>
@@ -197,38 +143,15 @@ export function Stats({ history, models }: StatsProps) {
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>Cost This Month</CardTitle>
+          <CardTitle>Cost This Month (Est.)</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-4xl font-bold">{formatCost(monthlyCost)}</p>
         </CardContent>
       </Card>
-      <Card className="md:col-span-2 lg:col-span-3">
+      <Card className="md:col-span-3">
         <CardHeader>
-          <CardTitle>Model Distribution</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {modelCounts.length > 0 ? (
-            <ResponsiveContainer width="100%" height={barChartHeight}>
-              <BarChart data={modelCounts} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                <XAxis type="number" hide />
-                <YAxis type="category" dataKey="name" width={80} stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => truncateText(value, 10)} />
-                <Tooltip cursor={{ fill: 'hsl(var(--accent))' }} content={<CustomModelTooltip />} />
-                <Bar dataKey="count" radius={[0, 4, 4, 0]}>
-                  {modelCounts.map((entry) => (
-                    <Cell key={`cell-${entry.name}`} fill={modelColorMap.get(entry.name) || '#8884d8'} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-[150px] flex items-center justify-center text-sm text-muted-foreground">No data for this period.</div>
-          )}
-        </CardContent>
-      </Card>
-      <Card className="md:col-span-2 lg:col-span-3">
-        <CardHeader>
-          <CardTitle>Daily Usage</CardTitle>
+          <CardTitle>Daily Usage (Messages)</CardTitle>
         </CardHeader>
         <CardContent>
           {dailyUsage.length > 0 ? (
@@ -238,10 +161,7 @@ export function Stats({ history, models }: StatsProps) {
                 <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={12} />
                 <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} allowDecimals={false} />
                 <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} />
-                <Legend content={<CustomLegend />} />
-                {Array.from(activeModelsInPeriod).map((model) => (
-                  <Line key={model} type="monotone" dataKey={model} stroke={modelColorMap.get(model)} dot={false} strokeWidth={2} />
-                ))}
+                <Line type="monotone" dataKey="messages" stroke={COLORS[0]} dot={false} strokeWidth={2} />
               </LineChart>
             </ResponsiveContainer>
           ) : (

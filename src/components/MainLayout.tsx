@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { SidebarProvider, Sidebar, SidebarTrigger, SidebarContent, SidebarHeader, SidebarFooter, useSidebar } from '@/components/ui/sidebar'
-import { PromptLogger } from '@/components/PromptLogger'
+import { ConversationStarter } from '@/components/ConversationStarter'
 import { Welcome } from '@/components/Welcome'
 import { useData } from '@/hooks/use-data'
 import { BotMessageSquare, LayoutDashboard, Settings, Plus, Loader2, Shield, HelpCircle } from 'lucide-react'
@@ -138,20 +138,20 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
       return;
     }
     const welcomeDismissed = localStorage.getItem(WELCOME_DISMISSED_KEY);
-    const isNewUser = data.history.length === 0 && !data.syncKey;
+    const isNewUser = data.conversations.length === 0 && !data.syncKey;
 
     if (isNewUser && !welcomeDismissed) {
       setShowWelcome(true);
     }
     setIsCheckingOnboarding(false);
-  }, [data.loading, data.history, data.syncKey]);
+  }, [data.loading, data.conversations, data.syncKey]);
 
   const handleGetStarted = () => {
     localStorage.setItem(WELCOME_DISMISSED_KEY, 'true');
     setShowWelcome(false);
   };
 
-  const handlePromptLogged = () => {
+  const handleConversationStarted = () => {
     setIsLoggerOpen(false);
   };
 
@@ -187,7 +187,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
                 <DialogTrigger asChild>
                   <Button className="w-full">
                     <Plus className="mr-2 h-4 w-4" />
-                    Log New Prompt
+                    New Conversation
                   </Button>
                 </DialogTrigger>
                 <DialogContent
@@ -204,12 +204,12 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
                   }}
                 >
                   <DialogHeader>
-                    <DialogTitle>Log a New Prompt</DialogTitle>
+                    <DialogTitle>Start a New Conversation</DialogTitle>
                   </DialogHeader>
-                  <PromptLogger
-                    addPrompt={data.addPrompt}
+                  <ConversationStarter
+                    createConversation={data.createConversation}
                     models={data.models}
-                    onPromptLogged={handlePromptLogged}
+                    onConversationStarted={handleConversationStarted}
                     isSubmitting={isSubmitting}
                     setIsSubmitting={setIsSubmitting}
                   />
@@ -220,7 +220,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
             </div>
           </SidebarContent>
           <SidebarFooter className="p-4 text-xs text-muted-foreground">
-            Version 1.6.46
+            Version 2.0.0
           </SidebarFooter>
         </Sidebar>
         
