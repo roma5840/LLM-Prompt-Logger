@@ -11,11 +11,12 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
 import { Model, Turn } from '@/lib/types'
 import { useToast } from '@/hooks/use-toast'
 import { useData } from '@/hooks/use-data'
 import { cn } from '@/lib/utils'
-import { Loader2, ChevronsUpDown } from 'lucide-react'
+import { Loader2, ChevronsUpDown, ArrowRightLeft } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible'
 import { Label } from './ui/label'
 
@@ -34,13 +35,31 @@ export function TurnLogger({ conversationId, addTurn, models, isSubmitting, setI
   const [outputText, setOutputText] = useState('')
   const [isInputOpen, setIsInputOpen] = useState(false)
   const [isOutputOpen, setIsOutputOpen] = useState(false)
+
+  const [inputMode, setInputMode] = useState<'auto' | 'manual'>('auto');
+  const [outputMode, setOutputMode] = useState<'auto' | 'manual'>('auto');
+  const [manualInputTokens, setManualInputTokens] = useState('');
+  const [manualOutputTokens, setManualOutputTokens] = useState('');
+
   const { toast } = useToast()
   const { noteCharacterLimit } = useData()
   
   const tokenHeuristic = (text: string) => Math.ceil(text.length / 4);
 
-  const inputTokens = useMemo(() => tokenHeuristic(inputText), [inputText]);
-  const outputTokens = useMemo(() => tokenHeuristic(outputText), [outputText]);
+  const inputTokens = useMemo(() => {
+    if (inputMode === 'manual') {
+        return parseInt(manualInputTokens, 10) || 0;
+    }
+    return tokenHeuristic(inputText);
+  }, [inputText, inputMode, manualInputTokens]);
+
+  const outputTokens = useMemo(() => {
+      if (outputMode === 'manual') {
+          return parseInt(manualOutputTokens, 10) || 0;
+      }
+      return tokenHeuristic(outputText);
+  }, [outputText, outputMode, manualOutputTokens]);
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -70,6 +89,10 @@ export function TurnLogger({ conversationId, addTurn, models, isSubmitting, setI
       setOutputText('')
       setIsInputOpen(false)
       setIsOutputOpen(false)
+      setManualInputTokens('');
+      setManualOutputTokens('');
+      setInputMode('auto');
+      setOutputMode('auto');
       // Don't reset model for convenience
     } catch (error: any) {
       toast({
@@ -81,6 +104,22 @@ export function TurnLogger({ conversationId, addTurn, models, isSubmitting, setI
       setIsSubmitting(false)
     }
   }
+
+  const handleModeChange = (
+    mode: 'input' | 'output',
+    setMode: React.Dispatch<React.SetStateAction<'auto' | 'manual'>>,
+    setText: React.Dispatch<React.SetStateAction<string>>,
+    setManualTokens: React.Dispatch<React.SetStateAction<string>>
+  ) => {
+    const currentMode = mode === 'input' ? inputMode : outputMode;
+    const nextMode = currentMode === 'auto' ? 'manual' : 'auto';
+    if (nextMode === 'manual') {
+      setText('');
+    } else {
+      setManualTokens('');
+    }
+    setMode(nextMode);
+  };
 
   return (
     <form onSubmit={handleSubmit} className="grid gap-4">
@@ -132,44 +171,90 @@ export function TurnLogger({ conversationId, addTurn, models, isSubmitting, setI
                 </CollapsibleTrigger>
                 {isInputOpen && (
                   <span className="text-xs text-muted-foreground">
-                      ~{inputTokens.toLocaleString()} input tokens
+                      {inputMode === 'auto' ? '~' : ''}{inputTokens.toLocaleString()} input tokens
                   </span>
                 )}
             </div>
             <CollapsibleContent className="space-y-2 pt-2">
-                <Textarea 
-                    placeholder="Paste the original prompt text here..."
-                    value={inputText}
-                    onChange={(e) => setInputText(e.target.value)}
-                    rows={5}
-                    disabled={isSubmitting}
-                />
+                <div className="flex justify-end -mt-1 -mb-1">
+                    <Button 
+                        type="button"
+                        variant="ghost" 
+                        size="sm" 
+                        className="text-xs h-auto py-1 px-2"
+                        onClick={() => handleModeChange('input', setInputMode, setInputText, setManualInputTokens)}
+                    >
+                        <ArrowRightLeft className="h-3 w-3 mr-1" />
+                        {inputMode === 'auto' ? 'Enter Manually' : 'Estimate from Text'}
+                    </Button>
+                </div>
+                {inputMode === 'auto' ? (
+                    <Textarea 
+                        placeholder="Paste the original prompt text here..."
+                        value={inputText}
+                        onChange={(e) => setInputText(e.target.value)}
+                        rows={5}
+                        disabled={isSubmitting}
+                    />
+                ) : (
+                    <Input
+                        type="number"
+                        placeholder="e.g. 1234"
+                        value={manualInputTokens}
+                        onChange={(e) => setManualInputTokens(e.target.value.replace(/\D/g, ''))}
+                        disabled={isSubmitting}
+                        min="0"
+                    />
+                )}
             </CollapsibleContent>
         </Collapsible>
 
         <Collapsible open={isOutputOpen} onOpenChange={setIsOutputOpen} className="grid gap-2">
-        <div className="flex items-center justify-between -mb-2">
-            <CollapsibleTrigger asChild>
-                <Button variant="ghost" size="sm" className="text-sm px-2 -ml-2">
-                    <ChevronsUpDown className="h-4 w-4 mr-2" />
-                    Add LLM Output (for token count)
-                </Button>
-            </CollapsibleTrigger>
-            {isOutputOpen && (
-                <span className="text-xs text-muted-foreground">
-                    ~{outputTokens.toLocaleString()} output tokens
-                </span>
-            )}
-        </div>
-        <CollapsibleContent className="space-y-2 pt-2">
-            <Textarea 
-                placeholder="Paste the model's output here..."
-                value={outputText}
-                onChange={(e) => setOutputText(e.target.value)}
-                rows={5}
-                disabled={isSubmitting}
-            />
-        </CollapsibleContent>
+            <div className="flex items-center justify-between -mb-2">
+                <CollapsibleTrigger asChild>
+                    <Button variant="ghost" size="sm" className="text-sm px-2 -ml-2">
+                        <ChevronsUpDown className="h-4 w-4 mr-2" />
+                        Add LLM Output (for token count)
+                    </Button>
+                </CollapsibleTrigger>
+                {isOutputOpen && (
+                    <span className="text-xs text-muted-foreground">
+                        {outputMode === 'auto' ? '~' : ''}{outputTokens.toLocaleString()} output tokens
+                    </span>
+                )}
+            </div>
+            <CollapsibleContent className="space-y-2 pt-2">
+                <div className="flex justify-end -mt-1 -mb-1">
+                    <Button 
+                        type="button"
+                        variant="ghost" 
+                        size="sm" 
+                        className="text-xs h-auto py-1 px-2"
+                        onClick={() => handleModeChange('output', setOutputMode, setOutputText, setManualOutputTokens)}
+                    >
+                        <ArrowRightLeft className="h-3 w-3 mr-1" />
+                        {outputMode === 'auto' ? 'Enter Manually' : 'Estimate from Text'}
+                    </Button>
+                </div>
+                {outputMode === 'auto' ? (
+                    <Textarea 
+                        placeholder="Paste the model's output here..."
+                        value={outputText}
+                        onChange={(e) => setOutputText(e.target.value)}
+                        rows={5}
+                        disabled={isSubmitting}
+                    />
+                ) : (
+                    <Input
+                        type="number"
+                        placeholder="e.g. 5678"
+                        value={manualOutputTokens}
+                        onChange={(e) => setManualOutputTokens(e.target.value.replace(/\D/g, ''))}
+                        disabled={isSubmitting}
+                        min="0"
+                    />
+                )}
+            </CollapsibleContent>
         </Collapsible>
       </div>
 
