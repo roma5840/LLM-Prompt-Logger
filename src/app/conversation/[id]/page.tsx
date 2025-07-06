@@ -53,7 +53,7 @@ export default function ConversationPage() {
           <Button variant="outline" size="icon" onClick={() => router.push('/')}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">{conversation.title}</h1>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight min-w-0 break-words">{conversation.title}</h1>
         </div>
 
         <TurnList turns={conversation.messages} models={models} />

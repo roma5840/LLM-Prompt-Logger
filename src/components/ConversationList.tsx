@@ -176,7 +176,7 @@ export function ConversationList({
             >
               <Card className="flex flex-col w-full hover:border-primary/50 transition-colors">
                 <CardHeader className="flex-row items-start gap-4 space-y-0">
-                  <div className="flex-1 space-y-1">
+                  <div className="flex-1 space-y-1 min-w-0">
                     {isEditing ? (
                       <div className="space-y-1" ref={editContainerRef} onClick={handleInteraction}>
                         <div className="flex gap-2">
@@ -202,7 +202,7 @@ export function ConversationList({
                         </div>
                       </div>
                     ) : (
-                      <CardTitleUI className="line-clamp-2">{convo.title}</CardTitleUI>
+                      <CardTitleUI className="line-clamp-2 break-words">{convo.title}</CardTitleUI>
                     )}
                     <CardDescription>
                       Updated: {new Date(convo.updated_at).toLocaleDateString()}
