@@ -51,6 +51,7 @@ export default function SettingsPage() {
 
   const [editableModels, setEditableModels] = useState<Model[]>([]);
   const [newModelName, setNewModelName] = useState('');
+  const [modelRenderKey, setModelRenderKey] = useState(Date.now());
 
   const [manualSyncKey, setManualSyncKey] = useState('')
   const [masterPassword, setMasterPassword] = useState('')
@@ -104,6 +105,7 @@ export default function SettingsPage() {
   
   const handleDiscardChanges = () => {
     setEditableModels(JSON.parse(JSON.stringify(data.models)));
+    setModelRenderKey(Date.now());
     toast({
         title: "Changes Discarded",
         description: "Your model configurations have been reset.",
@@ -355,32 +357,32 @@ export default function SettingsPage() {
                   <div className="w-[40px]"></div>
               </div>
 
-              <div className="space-y-2">
+              <div key={modelRenderKey} className="space-y-2">
                 {editableModels.map((model, index) => (
-                  <div key={index} className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_0.7fr_1fr_auto] gap-x-4 gap-y-2 items-center p-3 border rounded-lg bg-background hover:bg-muted/50 transition-colors">
+                  <div key={model.name} className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_0.7fr_1fr_auto] gap-x-4 gap-y-2 items-center p-3 border rounded-lg bg-background hover:bg-muted/50 transition-colors">
                     <div className="space-y-1 md:space-y-0">
-                      <Label htmlFor={`model-name-${index}`} className="text-xs font-medium text-muted-foreground md:hidden">Model Name</Label>
-                      <Input id={`model-name-${index}`} value={model.name} readOnly className="font-medium bg-muted/50 cursor-default" />
+                      <Label htmlFor={`model-name-${model.name}`} className="text-xs font-medium text-muted-foreground md:hidden">Model Name</Label>
+                      <Input id={`model-name-${model.name}`} value={model.name} readOnly className="font-medium bg-muted/50 cursor-default" />
                     </div>
 
                     <div className="space-y-1 md:space-y-0">
-                      <Label htmlFor={`input-cost-${index}`} className="text-xs font-medium text-muted-foreground md:hidden">Input Cost / 1M tokens ($)</Label>
-                      <Input id={`input-cost-${index}`} type="number" step="0.0001" min="0" value={model.inputCost || ''} onChange={e => handleUpdateModel(index, 'inputCost', e.target.value)} placeholder="0"/>
+                      <Label htmlFor={`input-cost-${model.name}`} className="text-xs font-medium text-muted-foreground md:hidden">Input Cost / 1M tokens ($)</Label>
+                      <Input id={`input-cost-${model.name}`} type="number" step="0.0001" min="0" value={model.inputCost || ''} onChange={e => handleUpdateModel(index, 'inputCost', e.target.value)} placeholder="0"/>
                     </div>
 
                     <div className="space-y-1 md:space-y-0">
-                      <Label htmlFor={`output-cost-${index}`} className="text-xs font-medium text-muted-foreground md:hidden">Output Cost / 1M tokens ($)</Label>
-                      <Input id={`output-cost-${index}`} type="number" step="0.0001" min="0" value={model.outputCost || ''} onChange={e => handleUpdateModel(index, 'outputCost', e.target.value)} placeholder="0"/>
+                      <Label htmlFor={`output-cost-${model.name}`} className="text-xs font-medium text-muted-foreground md:hidden">Output Cost / 1M tokens ($)</Label>
+                      <Input id={`output-cost-${model.name}`} type="number" step="0.0001" min="0" value={model.outputCost || ''} onChange={e => handleUpdateModel(index, 'outputCost', e.target.value)} placeholder="0"/>
                     </div>
                     
                     <div className="flex flex-col items-center justify-center space-y-1 md:space-y-0">
-                      <Label htmlFor={`cache-enabled-${index}`} className="text-xs font-medium text-muted-foreground md:hidden">Cache Enabled</Label>
-                      <Switch id={`cache-enabled-${index}`} checked={model.isCacheEnabled} onCheckedChange={checked => handleUpdateModel(index, 'isCacheEnabled', checked)} />
+                      <Label htmlFor={`cache-enabled-${model.name}`} className="text-xs font-medium text-muted-foreground md:hidden">Cache Enabled</Label>
+                      <Switch id={`cache-enabled-${model.name}`} checked={model.isCacheEnabled} onCheckedChange={checked => handleUpdateModel(index, 'isCacheEnabled', checked)} />
                     </div>
 
                     <div className="space-y-1 md:space-y-0">
-                        <Label htmlFor={`cached-input-cost-${index}`} className="text-xs font-medium text-muted-foreground md:hidden">Cached Cost / 1M ($)</Label>
-                        <Input id={`cached-input-cost-${index}`} type="number" step="0.0001" min="0" value={model.cachedInputCost || ''} onChange={e => handleUpdateModel(index, 'cachedInputCost', e.target.value)} placeholder="0" disabled={!model.isCacheEnabled}/>
+                        <Label htmlFor={`cached-input-cost-${model.name}`} className="text-xs font-medium text-muted-foreground md:hidden">Cached Cost / 1M ($)</Label>
+                        <Input id={`cached-input-cost-${model.name}`} type="number" step="0.0001" min="0" value={model.cachedInputCost || ''} onChange={e => handleUpdateModel(index, 'cachedInputCost', e.target.value)} placeholder="0" disabled={!model.isCacheEnabled}/>
                     </div>
 
                     <div className="flex justify-end md:justify-center">
