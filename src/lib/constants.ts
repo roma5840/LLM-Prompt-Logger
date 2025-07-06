@@ -12,6 +12,8 @@ export const DEFAULT_MODELS: Model[] = [
 ];
 
 export const NOTE_CHAR_LIMIT = 1500;
+export const CONVERSATION_TITLE_LIMIT = 150;
+export const MANUAL_TOKEN_LIMIT = 1_000_000_000;
 
 export const SALT_STORAGE = 'llmPromptSalt';
 export const SESSION_MASTER_PASSWORD_STORAGE = 'llmSessionMasterPassword';

@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils'
 import { Loader2, ChevronsUpDown, ArrowRightLeft } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible'
 import { Label } from './ui/label'
+import { MANUAL_TOKEN_LIMIT } from '@/lib/constants'
 
 interface TurnLoggerProps {
   conversationId: number
@@ -60,6 +61,22 @@ export function TurnLogger({ conversationId, addTurn, models, isSubmitting, setI
       return tokenHeuristic(outputText);
   }, [outputText, outputMode, manualOutputTokens]);
 
+  const handleManualTokenChange = (
+    value: string,
+    setter: React.Dispatch<React.SetStateAction<string>>
+  ) => {
+    const sanitizedValue = value.replace(/\D/g, '');
+    if (sanitizedValue === '') {
+      setter('');
+      return;
+    }
+    const numValue = parseInt(sanitizedValue, 10);
+    if (numValue > MANUAL_TOKEN_LIMIT) {
+      setter(String(MANUAL_TOKEN_LIMIT));
+    } else {
+      setter(sanitizedValue);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -201,7 +218,7 @@ export function TurnLogger({ conversationId, addTurn, models, isSubmitting, setI
                         type="number"
                         placeholder="e.g. 1234"
                         value={manualInputTokens}
-                        onChange={(e) => setManualInputTokens(e.target.value.replace(/\D/g, ''))}
+                        onChange={(e) => handleManualTokenChange(e.target.value, setManualInputTokens)}
                         disabled={isSubmitting}
                         min="0"
                     />
@@ -249,7 +266,7 @@ export function TurnLogger({ conversationId, addTurn, models, isSubmitting, setI
                         type="number"
                         placeholder="e.g. 5678"
                         value={manualOutputTokens}
-                        onChange={(e) => setManualOutputTokens(e.target.value.replace(/\D/g, ''))}
+                        onChange={(e) => handleManualTokenChange(e.target.value, setManualOutputTokens)}
                         disabled={isSubmitting}
                         min="0"
                     />

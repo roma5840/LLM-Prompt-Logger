@@ -16,6 +16,8 @@ import { MoreHorizontal, Trash2, CloudOff, MessageSquare, Edit } from 'lucide-re
 import { Skeleton } from './ui/skeleton'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle as CardTitleUI } from './ui/card'
 import { Input } from './ui/input'
+import { CONVERSATION_TITLE_LIMIT } from '@/lib/constants'
+import { cn } from '@/lib/utils'
 
 interface ConversationListProps {
   loading: boolean
@@ -176,19 +178,28 @@ export function ConversationList({
                 <CardHeader className="flex-row items-start gap-4 space-y-0">
                   <div className="flex-1 space-y-1">
                     {isEditing ? (
-                      <div className="flex gap-2" ref={editContainerRef} onClick={handleInteraction}>
-                        <Input 
-                          value={newTitle} 
-                          onChange={(e) => setNewTitle(e.target.value)} 
-                          onKeyDown={(e) => {
-                              if (e.key === 'Enter' && hasChanged) handleSaveEdit(e);
-                              if (e.key === 'Escape') setEditingConversationId(null);
-                          }}
-                          autoFocus
-                        />
-                        {hasChanged && (
-                          <Button size="sm" onClick={handleSaveEdit}>Save</Button>
-                        )}
+                      <div className="space-y-1" ref={editContainerRef} onClick={handleInteraction}>
+                        <div className="flex gap-2">
+                            <Input 
+                                value={newTitle} 
+                                onChange={(e) => setNewTitle(e.target.value)} 
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && hasChanged) handleSaveEdit(e);
+                                    if (e.key === 'Escape') setEditingConversationId(null);
+                                }}
+                                autoFocus
+                                maxLength={CONVERSATION_TITLE_LIMIT}
+                            />
+                            {hasChanged && (
+                                <Button size="sm" onClick={handleSaveEdit}>Save</Button>
+                            )}
+                        </div>
+                        <div className={cn(
+                            "text-right text-xs pr-1",
+                            newTitle.length >= CONVERSATION_TITLE_LIMIT ? "text-red-500" : "text-muted-foreground"
+                        )}>
+                            {newTitle.length}/{CONVERSATION_TITLE_LIMIT}
+                        </div>
                       </div>
                     ) : (
                       <CardTitleUI className="line-clamp-2">{convo.title}</CardTitleUI>

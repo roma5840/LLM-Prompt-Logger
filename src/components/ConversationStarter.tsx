@@ -9,6 +9,8 @@ import { Loader2 } from 'lucide-react'
 import { Label } from './ui/label'
 import { Input } from './ui/input'
 import { Conversation } from '@/lib/types'
+import { CONVERSATION_TITLE_LIMIT } from '@/lib/constants'
+import { cn } from '@/lib/utils'
 
 interface ConversationStarterProps {
   createConversation: (title: string) => Promise<number | undefined>
@@ -65,7 +67,14 @@ export function ConversationStarter({ createConversation, onConversationStarted,
             onChange={e => setTitle(e.target.value)}
             placeholder="e.g., 'Brainstorming session for Project X'"
             disabled={isSubmitting}
+            maxLength={CONVERSATION_TITLE_LIMIT}
           />
+          <div className={cn(
+              "text-right text-xs",
+              title.length >= CONVERSATION_TITLE_LIMIT ? "text-red-500" : "text-muted-foreground"
+          )}>
+            {title.length}/{CONVERSATION_TITLE_LIMIT}
+          </div>
         </div>
         <div className="pt-2">
             <Button type="submit" disabled={isSubmitting || !title} className="w-full">
