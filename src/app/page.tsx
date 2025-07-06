@@ -64,7 +64,7 @@ export default function Home() {
           </div>
         </div>
 
-        <Stats conversations={filteredConversations} models={data.models} />
+        <Stats conversations={filteredConversations} models={data.models} dateRange={dateRange} />
 
         <Card>
           <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
