@@ -20,6 +20,7 @@ import {
   SYNC_KEY_STORAGE,
   SALT_STORAGE,
   NOTE_CHAR_LIMIT,
+  CONVERSATION_TITLE_LIMIT,
   LOCAL_ONLY_HISTORY_STORAGE,
   SESSION_MASTER_PASSWORD_STORAGE,
 } from "@/lib/constants";
@@ -29,6 +30,7 @@ import {
   Turn,
   ImportConflict,
   ParsedImportData,
+  Resolution,
 } from "@/lib/types";
 import { useToast } from "./use-toast";
 import {
@@ -37,7 +39,6 @@ import {
   encrypt,
   decrypt,
 } from "@/lib/crypto";
-import { Resolution } from "@/components/ConflictResolver";
 
 interface DataContextType {
   conversations: Conversation[];
@@ -75,10 +76,10 @@ interface DataContextType {
   ) => Promise<void>;
   resolveImportConflicts: (
     resolvedData: ParsedImportData,
-    resolutions: Record<number, Resolution>
+    resolutions: Record<string, Resolution>
   ) => void;
   resolveMigrationConflicts: (
-    resolutions: Record<number, Resolution>,
+    resolutions: Record<string, Resolution>,
     password: string
   ) => Promise<void>;
   setConversations: React.Dispatch<React.SetStateAction<Conversation[]>>;
@@ -458,13 +459,22 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     convos: Conversation[]
   ): ImportConflict[] => {
     const conflicts: ImportConflict[] = [];
-    // Use the hardcoded limit here as this function is called before syncKey is set
-    const limit = NOTE_CHAR_LIMIT;
+    const noteLimit = NOTE_CHAR_LIMIT;
+    const titleLimit = CONVERSATION_TITLE_LIMIT;
 
     convos.forEach((convo) => {
+      if (convo.title.length > titleLimit) {
+        conflicts.push({
+          type: 'title_length',
+          conversationId: convo.id,
+          conversationTitle: convo.title,
+        });
+      }
+
       convo.messages.forEach((turn) => {
-        if (turn.content && turn.content.length > limit) {
+        if (turn.content && turn.content.length > noteLimit) {
           conflicts.push({
+            type: 'note_length',
             conversationId: convo.id,
             conversationTitle: convo.title,
             turnId: turn.id,
@@ -474,6 +484,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         }
       });
     });
+
     return conflicts;
   };
 
@@ -1010,27 +1021,29 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   const resolveImportConflicts = (
     resolvedData: ParsedImportData,
-    resolutions: Record<number, Resolution>
+    resolutions: Record<string, Resolution>
   ) => {
     const localOnlyConversationIds = new Set<number>();
+    
     Object.values(resolutions).forEach((res) => {
       if (res.choice === "keep_local") {
         localOnlyConversationIds.add(res.conversationId);
-      } else if (res.choice === "edit") {
-        const convoToUpdate = resolvedData.conversations.find(
-          (c) => c.id === res.conversationId
-        );
+      }
+    });
+
+    Object.entries(resolutions).forEach(([conflictKey, res]) => {
+      if (res.choice === 'edit' && !localOnlyConversationIds.has(res.conversationId)) {
+        const convoToUpdate = resolvedData.conversations.find((c) => c.id === res.conversationId);
         if (convoToUpdate) {
-          const turnIdToUpdate = Number(
-            Object.keys(resolutions).find(
-              (key) => resolutions[Number(key)] === res
-            )
-          );
-          const turnToUpdate = convoToUpdate.messages.find(
-            (t) => t.id === turnIdToUpdate
-          );
-          if (turnToUpdate) {
-            turnToUpdate.content = res.content;
+          const [type, idStr] = conflictKey.split('-');
+          const id = Number(idStr);
+          if (type === 'title_length' && convoToUpdate.id === id) {
+            convoToUpdate.title = res.content;
+          } else if (type === 'note_length') {
+            const turnToUpdate = convoToUpdate.messages.find((t) => t.id === id);
+            if (turnToUpdate) {
+              turnToUpdate.content = res.content;
+            }
           }
         }
       }
@@ -1058,37 +1071,56 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const resolveMigrationConflicts = async (
-    resolutions: Record<number, Resolution>,
+    resolutions: Record<string, Resolution>,
     password: string
   ) => {
     setSyncing(true);
     try {
       const localOnlyConversationIds = new Set<number>();
-      const conversationsToUpdate: Conversation[] = JSON.parse(
-        JSON.stringify(conversationsRef.current)
-      );
-
-      Object.entries(resolutions).forEach(([turnIdStr, res]) => {
-        const turnId = Number(turnIdStr);
-        if (res.choice === "keep_local") {
+      Object.values(resolutions).forEach((res) => {
+        if (res.choice === 'keep_local') {
           localOnlyConversationIds.add(res.conversationId);
-        } else if (res.choice === "edit") {
-          const convoToUpdate = conversationsToUpdate.find(
-            (c) => c.id === res.conversationId
-          );
-          if (convoToUpdate) {
-            const turnToUpdate = convoToUpdate.messages.find(
-              (t) => t.id === turnId
-            );
-            if (turnToUpdate) turnToUpdate.content = res.content;
-          }
         }
       });
 
-      const finalConversationsForSync = conversationsToUpdate.filter(
+      const editResolutions = new Map<string, Resolution>();
+      Object.entries(resolutions).forEach(([key, res]) => {
+        if (res.choice === 'edit') {
+          editResolutions.set(key, res);
+        }
+      });
+
+      const originalConversations: Conversation[] = JSON.parse(
+        JSON.stringify(conversationsRef.current)
+      ).map((c: any) => ({
+        ...c,
+        created_at: new Date(c.created_at),
+        updated_at: new Date(c.updated_at),
+        messages: c.messages.map((m: any) => ({
+          ...m,
+          timestamp: new Date(m.timestamp),
+        })),
+      }));
+
+      const updatedConversations = originalConversations.map(convo => {
+        const titleConflictKey = `title-${convo.id}`;
+        const titleResolution = editResolutions.get(titleConflictKey);
+        const newTitle = titleResolution ? titleResolution.content : convo.title;
+
+        const newMessages = convo.messages.map(turn => {
+          const noteConflictKey = `note-${turn.id}`;
+          const noteResolution = editResolutions.get(noteConflictKey);
+          const newContent = noteResolution ? noteResolution.content : turn.content;
+          return { ...turn, content: newContent };
+        });
+        
+        return { ...convo, title: newTitle, messages: newMessages };
+      });
+
+      const finalConversationsForSync = updatedConversations.filter(
         (c) => !localOnlyConversationIds.has(c.id)
       );
-      const finalLocalOnlyConversations = conversationsToUpdate
+      const finalLocalOnlyConversations = updatedConversations
         .filter((c) => localOnlyConversationIds.has(c.id))
         .map((c) => ({ ...c, is_local_only: true }));
 
@@ -1103,7 +1135,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         finalConversationsForSync,
         modelsToSync
       );
-
+  
       toast({
         title: "Sync Enabled",
         description: "Your data has been successfully encrypted and synced.",
@@ -1114,7 +1146,6 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         description: e.message,
         variant: "destructive",
       });
-      // Re-throw to allow UI to handle it if necessary
       throw e;
     } finally {
       setSyncing(false);
