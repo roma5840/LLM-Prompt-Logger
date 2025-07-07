@@ -77,50 +77,46 @@ export function Stats({ conversations, models, dateRange }: StatsProps) {
 
   const allMessages = useMemo(() => conversations.flatMap(c => c.messages), [conversations]);
 
-  const allTurnsWithCosts = useMemo(() => {
-    const turnsWithCosts: (Turn & { cost: number })[] = [];
+  const allTurnsWithData = useMemo(() => {
+    const turnsWithData: (Turn & { cost: number; contextTokens: number })[] = [];
     conversations.forEach(convo => {
       let cumulativeInputTokens = 0;
       let cumulativeOutputTokens = 0;
       convo.messages.forEach(turn => {
         const model = modelCostMap.get(turn.model);
-        if (!model) {
-          turnsWithCosts.push({ ...turn, cost: 0 });
-          return;
-        }
-        
-        let turnCost = 0;
         const contextTokens = cumulativeInputTokens + cumulativeOutputTokens;
-        
-        if (contextTokens > 0) {
-          const contextCostPerToken = (model.isCacheEnabled ? model.cachedInputCost : model.inputCost) / 1_000_000;
-          turnCost += contextTokens * contextCostPerToken;
-        }
-
         const turnInputTokens = turn.input_tokens || 0;
         const turnOutputTokens = turn.output_tokens || 0;
-        turnCost += turnInputTokens * (model.inputCost / 1_000_000);
-        turnCost += turnOutputTokens * (model.outputCost / 1_000_000);
+        
+        let turnCost = 0;
+        if (model) {
+            if (contextTokens > 0) {
+                const contextCostPerToken = (model.isCacheEnabled ? model.cachedInputCost : model.inputCost) / 1_000_000;
+                turnCost += contextTokens * contextCostPerToken;
+            }
+            turnCost += turnInputTokens * (model.inputCost / 1_000_000);
+            turnCost += turnOutputTokens * (model.outputCost / 1_000_000);
+        }
 
-        turnsWithCosts.push({ ...turn, cost: turnCost });
+        turnsWithData.push({ ...turn, cost: turnCost, contextTokens });
 
         cumulativeInputTokens += turnInputTokens;
         cumulativeOutputTokens += turnOutputTokens;
       });
     });
-    return turnsWithCosts;
+    return turnsWithData;
   }, [conversations, modelCostMap]);
   
   const totalConversations = conversations.length;
   const totalMessages = allMessages.length;
   const dailyMessages = allMessages.filter(m => new Date(m.timestamp) >= getStartOfToday()).length;
   
-  const totalCost = useMemo(() => allTurnsWithCosts.reduce((sum, turn) => sum + turn.cost, 0), [allTurnsWithCosts]);
-  const dailyCost = useMemo(() => allTurnsWithCosts.filter(t => new Date(t.timestamp) >= getStartOfToday()).reduce((sum, turn) => sum + turn.cost, 0), [allTurnsWithCosts]);
-  const monthlyCost = useMemo(() => allTurnsWithCosts.filter(t => new Date(t.timestamp) >= getStartOfMonth()).reduce((sum, turn) => sum + turn.cost, 0), [allTurnsWithCosts]);
+  const totalCost = useMemo(() => allTurnsWithData.reduce((sum, turn) => sum + turn.cost, 0), [allTurnsWithData]);
+  const dailyCost = useMemo(() => allTurnsWithData.filter(t => new Date(t.timestamp) >= getStartOfToday()).reduce((sum, turn) => sum + turn.cost, 0), [allTurnsWithData]);
+  const monthlyCost = useMemo(() => allTurnsWithData.filter(t => new Date(t.timestamp) >= getStartOfMonth()).reduce((sum, turn) => sum + turn.cost, 0), [allTurnsWithData]);
 
   const { dailyCosts, dailyTokens, dailyTurns, modelNames } = useMemo(() => {
-    const modelNames = Array.from(new Set(allTurnsWithCosts.map(t => t.model))).sort();
+    const modelNames = Array.from(new Set(allTurnsWithData.map(t => t.model))).sort();
 
     const dataByDate = new Map<string, {
       costs: Record<string, number>,
@@ -128,7 +124,7 @@ export function Stats({ conversations, models, dateRange }: StatsProps) {
       turns: Record<string, number>
     }>();
 
-    allTurnsWithCosts.forEach(turn => {
+    allTurnsWithData.forEach(turn => {
       const dateKey = new Date(turn.timestamp).toLocaleDateString('en-CA');
       if (!dataByDate.has(dateKey)) {
         dataByDate.set(dateKey, {
@@ -139,7 +135,10 @@ export function Stats({ conversations, models, dateRange }: StatsProps) {
       }
       const dayData = dataByDate.get(dateKey)!;
       dayData.costs[turn.model] += turn.cost;
-      dayData.tokens[turn.model] += (turn.input_tokens || 0) + (turn.output_tokens || 0);
+      
+      const totalTokensForTurn = turn.contextTokens + (turn.input_tokens || 0) + (turn.output_tokens || 0);
+      dayData.tokens[turn.model] += totalTokensForTurn;
+
       dayData.turns[turn.model] += 1;
     });
 
@@ -185,7 +184,7 @@ export function Stats({ conversations, models, dateRange }: StatsProps) {
     }
     
     return { dailyCosts: dailyCostsData, dailyTokens: dailyTokensData, dailyTurns: dailyTurnsData, modelNames };
-  }, [allTurnsWithCosts, dateRange]);
+  }, [allTurnsWithData, dateRange]);
 
   const renderChart = (title: string, data: any[], modelNames: string[], formatter: (val: number) => string, yAxisFormatter?: (val: any) => string) => (
     <Card className="md:col-span-3">

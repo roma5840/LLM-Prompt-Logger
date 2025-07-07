@@ -37,37 +37,40 @@ export function TurnList({ turns, models }: TurnListProps) {
   };
 
   const turnsWithCosts = useMemo(() => {
+    const result: (Turn & { cost: number; contextTokens: number })[] = [];
     let cumulativeInputTokens = 0
     let cumulativeOutputTokens = 0
 
-    return turns.map((turn) => {
+    turns.forEach((turn) => {
       const model = modelMap.get(turn.model)
-      if (!model) return { ...turn, cost: 0, contextTokens: 0 }
-
       const contextTokens = cumulativeInputTokens + cumulativeOutputTokens
-      
       const turnInputTokens = turn.input_tokens || 0
       const turnOutputTokens = turn.output_tokens || 0
+      
+      let totalTurnCost = 0;
 
-      // Calculate cost for this turn's context
-      let contextCost = 0
-      if (contextTokens > 0) {
-        const contextCostPerToken = (model.isCacheEnabled ? model.cachedInputCost : model.inputCost) / 1_000_000;
-        contextCost = contextTokens * contextCostPerToken;
+      if (model) {
+        // Calculate cost for this turn's context
+        let contextCost = 0
+        if (contextTokens > 0) {
+          const contextCostPerToken = (model.isCacheEnabled ? model.cachedInputCost : model.inputCost) / 1_000_000;
+          contextCost = contextTokens * contextCostPerToken;
+        }
+
+        // Calculate cost for this turn's own I/O
+        const turnInputCost = turnInputTokens * (model.inputCost / 1_000_000)
+        const turnOutputCost = turnOutputTokens * (model.outputCost / 1_000_000)
+
+        totalTurnCost = contextCost + turnInputCost + turnOutputCost
       }
-
-      // Calculate cost for this turn's own I/O
-      const turnInputCost = turnInputTokens * (model.inputCost / 1_000_000)
-      const turnOutputCost = turnOutputTokens * (model.outputCost / 1_000_000)
-
-      const totalTurnCost = contextCost + turnInputCost + turnOutputCost
       
       // Update cumulative tokens for the *next* turn
       cumulativeInputTokens += turnInputTokens
       cumulativeOutputTokens += turnOutputTokens
 
-      return { ...turn, cost: totalTurnCost, contextTokens }
-    })
+      result.push({ ...turn, cost: totalTurnCost, contextTokens });
+    });
+    return result;
   }, [turns, modelMap])
 
   if (turns.length === 0) {
