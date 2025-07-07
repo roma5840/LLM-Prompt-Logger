@@ -77,7 +77,7 @@ interface DataContextType {
   resolveImportConflicts: (
     resolvedData: ParsedImportData,
     resolutions: Record<string, Resolution>
-  ) => void;
+  ) => Promise<void>;
   resolveMigrationConflicts: (
     resolutions: Record<string, Resolution>,
     password: string
@@ -994,14 +994,16 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
           importHandled = true; // Handed off to resolver
           return;
         }
+        // If no conflicts, proceed with direct import
+        await resolveImportConflicts(parsedData, {});
+      } else {
+        setModels(parsedData.models);
+        setConversations((prev) => [...prev, ...parsedData.conversations]);
+        toast({
+          title: "Import Successful",
+          description: "Your data has been imported.",
+        });
       }
-
-      setModels(parsedData.models);
-      setConversations((prev) => [...prev, ...parsedData.conversations]);
-      toast({
-        title: "Import Successful",
-        description: "Your data has been imported.",
-      });
       importHandled = true;
     } catch (error: any) {
       console.error("Import error:", error);
@@ -1019,55 +1021,101 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const resolveImportConflicts = (
+  const resolveImportConflicts = async (
     resolvedData: ParsedImportData,
     resolutions: Record<string, Resolution>
   ) => {
-    const localOnlyConversationIds = new Set<number>();
-    
-    Object.values(resolutions).forEach((res) => {
-      if (res.choice === "keep_local") {
-        localOnlyConversationIds.add(res.conversationId);
+    setSyncing(true);
+    try {
+      if (!syncKey || !encryptionKey || !masterPassword) {
+        throw new Error("Cannot import data while app is locked.");
       }
-    });
-
-    Object.entries(resolutions).forEach(([conflictKey, res]) => {
-      if (res.choice === 'edit' && !localOnlyConversationIds.has(res.conversationId)) {
-        const convoToUpdate = resolvedData.conversations.find((c) => c.id === res.conversationId);
-        if (convoToUpdate) {
-          const [type, idStr] = conflictKey.split('-');
-          const id = Number(idStr);
-          if (type === 'title_length' && convoToUpdate.id === id) {
-            convoToUpdate.title = res.content;
-          } else if (type === 'note_length') {
-            const turnToUpdate = convoToUpdate.messages.find((t) => t.id === id);
-            if (turnToUpdate) {
-              turnToUpdate.content = res.content;
-            }
-          }
+  
+      const localOnlyConversationIds = new Set<number>();
+      Object.values(resolutions).forEach((res) => {
+        if (res.choice === 'keep_local') {
+          localOnlyConversationIds.add(res.conversationId);
         }
+      });
+  
+      const conversationsWithEdits = resolvedData.conversations.map(convo => {
+        const titleConflictKey = `title-${convo.id}`;
+        const titleResolution = resolutions[titleConflictKey];
+        const newTitle = (titleResolution?.choice === 'edit') ? titleResolution.content : convo.title;
+        
+        const newMessages = convo.messages.map(turn => {
+          const noteConflictKey = `note-${turn.id}`;
+          const noteResolution = resolutions[noteConflictKey];
+          const newContent = (noteResolution?.choice === 'edit') ? noteResolution.content : turn.content;
+          return { ...turn, content: newContent };
+        });
+  
+        return { ...convo, title: newTitle, messages: newMessages };
+      });
+  
+      const conversationsToSync = conversationsWithEdits.filter(
+        c => !localOnlyConversationIds.has(c.id)
+      );
+      const conversationsToKeepLocal = conversationsWithEdits
+        .filter(c => localOnlyConversationIds.has(c.id))
+        .map(c => ({ ...c, is_local_only: true }));
+
+      if (resolvedData.models) {
+        await updateUserModels(resolvedData.models);
       }
-    });
+      setLocalOnlyConversations((prev) => [...prev, ...conversationsToKeepLocal]);
 
-    const syncedConversations: Conversation[] = [];
-    const localConversations: Conversation[] = [];
-
-    resolvedData.conversations.forEach((convo) => {
-      if (localOnlyConversationIds.has(convo.id)) {
-        localConversations.push({ ...convo, is_local_only: true });
-      } else {
-        syncedConversations.push(convo);
+      if (conversationsToSync.length === 0) {
+        toast({ title: "Import Complete", description: "Conflicts resolved and local data imported." });
+        return;
       }
-    });
 
-    setModels(resolvedData.models);
-    setConversations((prev) => [...prev, ...syncedConversations]);
-    setLocalOnlyConversations((prev) => [...prev, ...localConversations]);
+      const salt = localStorage.getItem(SALT_STORAGE);
+      if (!salt) throw new Error("Salt not found for encryption.");
+      const token = await getAccessToken(masterPassword, salt);
+  
+      const encryptedPayload = await Promise.all(
+        conversationsToSync.map(async (c) => ({
+          title: await encrypt(c.title, encryptionKey),
+          created_at: c.created_at.toISOString(),
+          updated_at: c.updated_at.toISOString(),
+          messages: await Promise.all(
+            c.messages.map(async (m) => ({
+              model: m.model,
+              role: m.role,
+              content: await encrypt(m.content, encryptionKey),
+              input_tokens: m.input_tokens !== null ? await encrypt(String(m.input_tokens), encryptionKey) : null,
+              output_tokens: m.output_tokens !== null ? await encrypt(String(m.output_tokens), encryptionKey) : null,
+              timestamp: m.timestamp.toISOString(),
+            }))
+          ),
+        }))
+      );
+  
+      const { error: batchError } = await supabase.rpc("batch_add_conversations", {
+        p_bucket_id: syncKey,
+        p_access_token: token,
+        p_conversations_jsonb: encryptedPayload,
+      });
+  
+      if (batchError) {
+        throw new Error(`Failed to upload imported data: ${batchError.message}`);
+      }
+  
 
-    toast({
-      title: "Import Complete",
-      description: "Conflicts resolved and data has been imported.",
-    });
+      await refreshDataFromSupabase(syncKey, encryptionKey);
+      await broadcastChange("data_changed");
+  
+      toast({
+        title: "Import Successful",
+        description: "Your data has been successfully imported and synced.",
+      });
+    } catch (e: any) {
+      toast({ title: "Import Failed", description: e.message, variant: "destructive" });
+      throw e;
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const resolveMigrationConflicts = async (

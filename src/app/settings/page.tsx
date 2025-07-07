@@ -38,9 +38,9 @@ import { Loader2, AlertTriangle, ShieldCheck, ShieldOff, Info, Trash2, Save, Rot
 import { cn } from '@/lib/utils'
 import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Model, ImportConflict, ParsedImportData } from '@/lib/types'
+import { Model, ImportConflict, ParsedImportData, Resolution } from '@/lib/types'
 import { Label } from '@/components/ui/label'
-import { ConflictResolver, Resolution } from '@/components/ConflictResolver'
+import { ConflictResolver } from '@/components/ConflictResolver'
 
 const MODEL_NAME_MAX_LENGTH = 80;
 const MODEL_LIMIT = 10;
@@ -278,17 +278,21 @@ export default function SettingsPage() {
     setFileToImport(null);
   };
   
-  const handleResolve = async (resolutions: Record<number, Resolution>) => {
-    if (conflictedImportData) {
-      data.resolveImportConflicts(conflictedImportData, resolutions);
-    } else {
-      await data.resolveMigrationConflicts(resolutions, masterPassword);
-      setIsMigrateDialogOpen(false);
+  const handleResolve = async (resolutions: Record<string, Resolution>) => {
+    try {
+      if (conflictedImportData) {
+        await data.resolveImportConflicts(conflictedImportData, resolutions);
+      } else {
+        await data.resolveMigrationConflicts(resolutions, masterPassword);
+        setIsMigrateDialogOpen(false);
+      }
+    } catch(e) {
+      // Errors are toasted inside the data hook
+    } finally {
+      setIsConflictModalOpen(false);
+      setConflicts([]);
+      setConflictedImportData(null);
     }
-
-    setIsConflictModalOpen(false);
-    setConflicts([]);
-    setConflictedImportData(null);
   };
 
   const handleCancelConflict = () => {
