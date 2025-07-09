@@ -11,7 +11,7 @@ import {
   useMemo,
   useRef,
 } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import {
   DEFAULT_MODELS,
@@ -120,6 +120,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [isLocked, setIsLocked] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
+  const pathname = usePathname();
 
   const conversationsRef = useRef(conversations);
   useEffect(() => {
@@ -721,9 +722,13 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     const targetConvo = mergedConversations.find((c) => c.id === id);
     if (!targetConvo) return;
 
+    const isViewingDeletedConvo = pathname === `/conversation/${id}`;
+
     if (targetConvo.is_local_only) {
       setLocalOnlyConversations((prev) => prev.filter((c) => c.id !== id));
-      router.push("/");
+      if (isViewingDeletedConvo) {
+        router.push("/");
+      }
       return;
     }
 
@@ -748,7 +753,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         }
 
         await broadcastChange("data_changed");
-        router.push("/");
+        if (isViewingDeletedConvo) {
+          router.push("/");
+        }
       } catch (error) {
         setConversations(originalConversations);
         toast({
@@ -758,7 +765,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         });
       }
     } else {
-      router.push("/");
+      if (isViewingDeletedConvo) {
+        router.push("/");
+      }
     }
   };
 
