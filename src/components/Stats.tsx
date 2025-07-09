@@ -127,19 +127,15 @@ export function Stats({ conversations, models, dateRange }: StatsProps) {
     allTurnsWithData.forEach(turn => {
       const dateKey = new Date(turn.timestamp).toLocaleDateString('en-CA');
       if (!dataByDate.has(dateKey)) {
-        dataByDate.set(dateKey, {
-          costs: Object.fromEntries(modelNames.map(m => [m, 0])),
-          tokens: Object.fromEntries(modelNames.map(m => [m, 0])),
-          turns: Object.fromEntries(modelNames.map(m => [m, 0])),
-        });
+        dataByDate.set(dateKey, { costs: {}, tokens: {}, turns: {} });
       }
       const dayData = dataByDate.get(dateKey)!;
-      dayData.costs[turn.model] += turn.cost;
       
       const totalTokensForTurn = turn.contextTokens + (turn.input_tokens || 0) + (turn.output_tokens || 0);
-      dayData.tokens[turn.model] += totalTokensForTurn;
 
-      dayData.turns[turn.model] += 1;
+      dayData.costs[turn.model] = (dayData.costs[turn.model] || 0) + turn.cost;
+      dayData.tokens[turn.model] = (dayData.tokens[turn.model] || 0) + totalTokensForTurn;
+      dayData.turns[turn.model] = (dayData.turns[turn.model] || 0) + 1;
     });
 
     const today = new Date();
@@ -209,7 +205,7 @@ export function Stats({ conversations, models, dateRange }: StatsProps) {
                     <Tooltip content={<CustomTooltip formatter={formatter} />} />
                     <Legend iconSize={10}/>
                     {modelNames.map((model, i) => (
-                        <Area key={model} type="monotone" dataKey={model} stackId="1" stroke={COLORS[i % COLORS.length]} strokeWidth={2} fillOpacity={1} fill={`url(#color${i})`} />
+                        <Area key={model} type="monotone" dataKey={model} stroke={COLORS[i % COLORS.length]} strokeWidth={2} fillOpacity={1} fill={`url(#color${i})`} />
                     ))}
                 </AreaChart>
             </ResponsiveContainer>
