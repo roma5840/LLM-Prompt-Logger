@@ -2,8 +2,8 @@ name: Ping Supabase
 
 on:
   schedule:
-    # Runs at 00:00 UTC every Sunday
-    - cron: '0 0 * * 0'
+    # Runs at 00:00 UTC every 2 days
+    - cron: '0 0 */2 * *'
 
 jobs:
   ping-supabase:
